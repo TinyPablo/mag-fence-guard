@@ -1,0 +1,16 @@
+# PlatformIO / ESP32 build artifacts - regenerated on every build, no reason to track them
+.pio/
+.pioenvs/
+.piolibdeps/
+
+# Editor/IDE local settings - personal to each machine, not project config
+.vscode/
+.idea/
+
+# OS junk files that macOS/Windows scatter into folders
+.DS_Store
+Thumbs.db
+
+# Local secrets (WiFi credentials, API keys) if/when we add a secrets.h or .env for ESP32 config
+secrets.h
+.env
