@@ -79,8 +79,36 @@ get RFID tags for direct access without going through the house.
   since RFID access is human-paced. Removed `enable_irq_on_detect()` from
   `lib/mfrc522.py` and deleted the IRQ/debug test scripts - polling stays
   the approach for RFID. Full writeup in `docs/rfid.md`.
-- **Next:** Decide whitelist management approach (hardcoded vs.
-  enrollment), then whether to merge `test/rfid-read`.
+- **Done:** Merged `test/rfid-read` into `main` (branch deleted per
+  workflow). RFID whitelist management (hardcoded vs. enrollment) is still
+  an open decision, unresolved - currently hardcoded, works fine at 6 tags.
+- **In progress:** Gate prototype (RFID + relay + electromagnet + LED,
+  `test/gate-prototype` branch, work stashed) confirmed working standalone
+  from the 12V PSU + step-down converter - no laptop/USB power needed. Not
+  yet merged to main.
+- **Open problem:** free exit isn't solved yet - someone let in via RFID
+  has no way to leave without a tag. A hidden button was considered but
+  rejected (findable by outsiders too, no way to place it far enough from
+  the gate to matter). Leading option: a PIR motion sensor on the inside of
+  the gate, auto-unlocking for anyone approaching from inside. Not decided
+  or built yet.
+- **In progress:** New branch `test/audio-wifi-relay` off `main` - testing
+  the mic and speaker audio modules independently, using a Mac as a
+  WiFi relay/"man in the middle" (ESP32 has no storage to save WAV files
+  itself). This is a debug harness only, not a transport candidate for the
+  real gate<->house link. Mic side (`test_audio_wifi_mic.py`) records 8s
+  and streams it to a Python TCP listener on the Mac
+  (`tools/audio-wifi-relay/mic_receiver.py`), which saves a `.wav` to
+  listen to. Speaker side (testing playback of that same recording) comes
+  next, once the mic recording is confirmed clean. See `docs/audio.md`.
+  Earlier loopback/ESP-NOW audio work lives on the separate, not-yet-merged
+  `test/audio-loopback` branch (data flowed over ESP-NOW but playback
+  quality wasn't resolved) - paused, not abandoned.
+- **Next:** Get a clean mic recording via the WiFi relay test; then test
+  the speaker the same way; then test both together; then decide the real
+  ESP32<->ESP32 transport (ESP-NOW vs. MQTT vs. other) and test its range
+  at the real ~20m gate<->house distance; decide the exit mechanism;
+  eventually wire up physical buttons (GPIO interrupts) on both nodes.
 
 ## How this file gets used
 
