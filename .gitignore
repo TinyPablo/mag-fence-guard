@@ -11,6 +11,12 @@
 .DS_Store
 Thumbs.db
 
-# Local secrets (WiFi credentials, API keys) if/when we add a secrets.h or .env for ESP32 config
+# Local secrets (WiFi credentials, API keys) - never commit real values,
+# only the .example templates
 secrets.h
+secrets.py
 .env
+
+# Personal test recordings from the audio-wifi-relay debug harness - not
+# project content, see docs/audio.md
+tools/audio-wifi-relay/recordings/
