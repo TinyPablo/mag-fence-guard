@@ -22,10 +22,12 @@
 #              GAIN=floating, SD=3.3V
 #
 # Needs secrets.py alongside this file on BOTH boards - copy
-# secrets.py.example, fill in WIFI_SSID/WIFI_PASSWORD/PEER_IP/PEER_PORT.
-# PEER_IP is the OTHER board's IP (check with wlan.ifconfig() after this
-# script connects and prints its own IP). PEER_PORT is the same number on
-# both boards - each listens on it locally AND sends to the peer on it.
+# secrets.py.example, fill in WIFI_SSID/WIFI_PASSWORD/STATIC_IP/PEER_IP/
+# PEER_PORT. Each board gets its OWN static IP (STATIC_IP) so the peer
+# address never drifts after a DHCP renewal - no more re-checking IPs after
+# the router reassigns leases. PEER_IP is the OTHER board's STATIC_IP.
+# PEER_PORT is the same number on both boards - each listens on it locally
+# AND sends to the peer on it.
 
 import network
 import socket
@@ -33,7 +35,11 @@ import uarray as array
 from machine import Pin, I2S
 from time import sleep_ms, ticks_ms, ticks_diff
 
-from secrets import WIFI_SSID, WIFI_PASSWORD, PEER_IP, PEER_PORT
+from secrets import WIFI_SSID, WIFI_PASSWORD, STATIC_IP, PEER_IP, PEER_PORT
+
+NETMASK = "255.255.255.0"
+GATEWAY = "192.168.1.1"
+DNS = "192.168.1.1"
 
 MIC_SCK_PIN = 5
 MIC_WS_PIN = 4
@@ -51,6 +57,7 @@ METER_INTERVAL_MS = 150
 
 wlan = network.WLAN(network.STA_IF)
 wlan.active(True)
+wlan.ifconfig((STATIC_IP, NETMASK, GATEWAY, DNS))
 if not wlan.isconnected():
     print("Connecting to WiFi:", WIFI_SSID, "...")
     wlan.connect(WIFI_SSID, WIFI_PASSWORD)
