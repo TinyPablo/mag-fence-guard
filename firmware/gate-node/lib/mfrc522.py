@@ -177,6 +177,29 @@ class MFRC522:
 
 		return stat, bits
 
+	def arm_irq(self):
+
+		# Narrow interrupt mask (RxIEn only, no TimerIEn) so the physical
+		# IRQ pin fires only when a tag actually responds. request()/
+		# anticoll() can't be reused for this: _tocard() always resets
+		# ComIEnReg to the broad 0x77 mask, which also routes the internal
+		# command timeout to the same pin - that's what made the pin fire
+		# on nearly every cycle in the earlier attempt (see docs/rfid.md,
+		# "IRQ pin: tried and dropped"). This sends REQA directly instead
+		# of going through request().
+
+		self._wreg(0x0D, 0x07)
+		self._wreg(0x02, 0x20)
+		self._cflags(0x04, 0x80)
+		self._sflags(0x0A, 0x80)
+		self._wreg(0x01, 0x00)
+		self._wreg(0x09, self.REQIDL)
+		self._wreg(0x01, 0x0C)
+		self._sflags(0x0D, 0x80)
+
+	def disarm_irq(self):
+		self._cflags(0x0D, 0x80)
+
 	def anticoll(self):
 
 		ser_chk = 0

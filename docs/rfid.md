@@ -72,6 +72,35 @@ removed from `lib/mfrc522.py`, IRQ is left unconnected. Physical buttons
 (`machine.Pin.irq()`) are the standard, well-trodden approach there and
 don't have this complication.
 
+## IRQ pin: tried again with a narrower mask, still dropped
+
+Retried on the ESP32-S3 (N16R8) board, this time going after the actual
+root cause instead of the pin behavior: `_tocard()` always resets
+`ComIEnReg` to a broad `0x77` mask (includes `TimerIEn`), which is what
+made the pin fire on nearly every cycle the first time. Added
+`arm_irq()`/`disarm_irq()` to `lib/mfrc522.py`, bypassing `request()`
+entirely to send REQA with a narrow `ComIEnReg = 0x20` (`RxIEn` only, no
+`TimerIEn`) mask, with a host-side retry timer (resend REQA every 200ms)
+standing in for the RC522's own timeout interrupt.
+
+Result, measured with a diagnostic build that logs `ComIrqReg` at every
+pin trigger: the physical IRQ pin still fired almost immediately after
+every REQA send (~13ms), tag present or not. `ComIrqReg` read `0x44`
+(`TxIRq` + `LoAlertIRq`) every time, with `RxIRq` (the bit we actually
+enabled) never set. So the pin is triggering on the RC522's own
+transmission completing, not on a tag response - even though those
+sources (`TxIEn`, `LoAlertIEn`) were explicitly left disabled in
+`ComIEnReg`. That's not a masking bug on the host side; it points to this
+being a cheap RC522 clone that doesn't fully honor `ComIEnReg` masking on
+the physical pin.
+
+**Decision:** dropped again, same reasoning as before (human-paced access,
+150ms polling is imperceptible) but now with harder evidence it's a
+hardware limitation, not a fixable masking bug. `arm_irq()`/`disarm_irq()`
+are left in `lib/mfrc522.py` (harmless, unused by the polling scripts) in
+case a genuine NXP-chip reader is tried later. `test_gate_unlock.py` uses
+plain polling for RFID; only the button is interrupt-driven there.
+
 ## Open
 
 Whitelist management approach (hardcoded vs. an enrollment mode) is not
