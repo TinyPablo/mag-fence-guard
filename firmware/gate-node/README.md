@@ -1,7 +1,7 @@
 # Gate node
 
-ESP32 (ESP32-WROOM-32 DevKit) at the pole: RFID, magnet relay, mic, speaker,
-button. Firmware is MicroPython, developed/flashed via Thonny.
+ESP32-S3 (N16R8) at the pole: RFID, magnet relay, mic, speaker, button.
+Firmware is MicroPython, developed/flashed via Thonny.
 
 ## RFID test (`test_rfid.py`)
 
@@ -11,16 +11,19 @@ Prints the UID of any tag brought near the RC522 reader. Upload both
 
 Wiring:
 
-| RC522 pin | ESP32 GPIO |
+| RC522 pin | ESP32-S3 GPIO |
 |---|---|
-| SCK | 18 |
-| MOSI | 23 |
-| MISO | 19 |
-| SDA (chip-select) | 5 |
-| RST | 22 |
+| SCK | 12 |
+| MOSI | 11 |
+| MISO | 10 |
+| SDA (chip-select) | 17 |
+| RST | 16 |
 | IRQ | not used - see `docs/rfid.md` for why |
 | 3.3V | 3V3 |
 | GND | GND |
+
+These pins avoid GPIO22-25 (don't exist on the S3), GPIO19/20 (native USB
+D-/D+), and GPIO26-37 (reserved for octal flash/PSRAM on the N16R8 module).
 
 `lib/mfrc522.py` is vendored from
 [wendlers/micropython-mfrc522](https://github.com/wendlers/micropython-mfrc522)

@@ -17,7 +17,7 @@ WHITELIST = {
     "DC-FA-14-4A",
 }
 
-reader = MFRC522(sck=18, mosi=23, miso=19, rst=22, cs=5)
+reader = MFRC522(sck=12, mosi=11, miso=10, rst=16, cs=17)
 led = Pin(2, Pin.OUT)
 
 print("Bring a tag close - LED lights up only for the 6 known tags.")

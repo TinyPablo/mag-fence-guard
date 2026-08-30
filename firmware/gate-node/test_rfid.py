@@ -1,11 +1,16 @@
 # Quick RFID test: prints the UID of any tag brought near the reader.
-# Wiring (RC522 -> ESP32): SCK=18, MOSI=23, MISO=19, SDA(=CS)=5, RST=22,
+# Wiring (RC522 -> ESP32-S3): SCK=12, MOSI=11, MISO=10, SDA(=CS)=17, RST=16,
 # IRQ unconnected, 3.3V=3V3, GND=GND. See lib/mfrc522.py for the driver.
+#
+# These pins were picked to avoid GPIO22-25 (don't exist on the S3),
+# GPIO19/20 (native USB D-/D+), GPIO26-37 (reserved for octal flash/PSRAM
+# on the N16R8 module), and every pin already used elsewhere in this
+# project (2, 4-9, 13, 14, 15, 18).
 
 from time import sleep_ms
 from lib.mfrc522 import MFRC522
 
-reader = MFRC522(sck=18, mosi=23, miso=19, rst=22, cs=5)
+reader = MFRC522(sck=12, mosi=11, miso=10, rst=16, cs=17)
 
 print("Bring a tag close to the reader...")
 
