@@ -134,3 +134,12 @@ The preceding polling update was reverted. Reconnect RC522 IRQ to GPIO21
 with power removed and upload the restored driver and gate script together.
 Keep the existing recovery, debug, session and chime modules. House wiring
 and code remain unchanged. Current startup reports `RFID IRQ GPIO21`.
+
+
+## Integrated voice update
+
+The current gate/house scripts now enable two-way voice during TALKING.
+Upload the updated shared session/chime modules and new
+`lib/intercom_audio.py` to both boards before running the updated scripts.
+See `audio-integration.md` for the full upload and test checklist. Earlier
+control-only descriptions above refer to the preceding hardware checkpoint.

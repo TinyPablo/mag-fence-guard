@@ -3,6 +3,13 @@
 Record hardware results here after each test. Distinguish observed behavior
 from behavior expected from the code. Do not record Wi-Fi passwords.
 
+## Current implementation - integrated voice awaiting hardware verification
+
+Two-way audio has been added to the existing call scripts, only while
+TALKING. This is not yet a hardware-confirmed checkpoint. See
+`audio-integration.md` for upload paths and acceptance checks. The following
+checkpoint describes the last tested behavior before this addition.
+
 ## Current checkpoint - call controls with recoverable IRQ RFID
 
 This section supersedes earlier pending-test notes below. The dated entries
@@ -365,3 +372,20 @@ diagnostics, startup reset delays/retry, and automatic configuration
 recovery with counters. Reconnect RC522 IRQ to GPIO21 with power removed.
 Call controls and house code are unchanged. Restoration does not establish
 long-term stability or resolve the cause of configuration loss.
+
+
+## Integrated voice implementation - hardware test pending
+
+Added `lib/intercom_audio.py` and shared speaker ownership with the chime.
+The existing house/gate scripts service nonblocking microphone capture,
+UDP send/receive and speaker playback only in TALKING. Ending a call stops
+voice and restores chime ownership; no microphone is initialized in IDLE
+or RINGING. Audio datagrams carry the call ID and sequence number. Bounded
+playback buffers and receive work avoid unbounded queue growth; transient
+send errors including ENOMEM are counted instead of stopping gate control.
+
+Four host-side tests passed for state-gated resource lifecycle, session/
+peer/sequence filtering, send failure handling, and initialization cleanup.
+Hardware timing, acoustic feedback, repeated-call stability and coexistence
+with RFID recovery remain to be verified. Standalone audio checkpoint is
+unchanged. No PR or deployment is part of this stage.
