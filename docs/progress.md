@@ -477,3 +477,45 @@ stabilized sensor; normal default remains 60000 ms. House unlock notices
 accept source `pir`. Full version markers and Thonny bundles are 0.6.0.
 Thirty host tests pass, including warm-up HIGH suppression, no extension,
 post-lock rearming and PIR notification. Physical verification is pending.
+
+## 2026-10-23 - 0.6.1 startup and hardware checkpoint
+
+Added a GPIO14 startup service bypass on both roles. Holding the button to
+GND throughout the first three seconds leaves the application stopped and
+the REPL available. Gate sets the active-high relay output LOW before
+application imports. Added optional main.py examples that catch application
+errors and preserve console access. Keep boot.py free of application imports;
+install the matching main.py example manually when automatic startup is needed.
+The uploader includes service_mode.py and preserves existing boot/main files.
+All release version markers are 0.6.1.
+
+Observed hardware state:
+
+- Relay operation was confirmed working again after wiring checks. The exact
+  cause of the temporary loss of magnet holding was not established.
+- RC522 remains unresolved. Startup sometimes fails with Command=0xFF and
+  Version=0xFF, including after the driver's RST-pin retry. The exception
+  currently stops the entire gate application before network/audio startup.
+- A separate startup reached Chime initialization and failed with MemoryError
+  while allocating 13042 bytes. Chime builds audio by repeatedly extending
+  bytearrays. No memory optimization or confirmed fix has been applied.
+- Temporary RFID-disable support was removed. Normal IRQ initialization,
+  diagnostics and existing runtime recovery remain enabled.
+- External 5V-only startup has not been confirmed reliable. USB can supply
+  the board during a combined-power test and mask an external power issue.
+
+Board photographs match the layout of the YD-ESP32-S3 family. The IN-OUT
+and USB-OTG solder jumpers appear open in the photographs. The manufacturer's
+V1.4 schematic shows diode isolation of both USB inputs and the header 5V
+input, with these jumpers bypassing the respective diodes. Exact board
+revision and electrical equivalence have not been independently verified.
+Reference: https://github.com/vcc-gnd/YD-ESP32-S3/blob/main/5-public-YD-ESP32-S3-Hardware%20info/YD-ESP32-S3-SCH-V1.4.pdf
+
+Next checks: compare cold startup on USB-only and external-only power;
+measure supply directly at RC522; investigate reader communication and
+Chime startup memory use separately. A reader startup failure still needs
+to be isolated from the rest of the application in a future change.
+
+Verification: 33 host tests passed, including the service bypass on both
+roles, full-hold timing and initialization ordering. git diff --check passed.
+These checks do not establish hardware power stability or RFID reliability.
