@@ -3,6 +3,7 @@
 
 import argparse
 import ast
+import base64
 import hashlib
 from pathlib import Path
 import subprocess
@@ -12,17 +13,47 @@ ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / 'firmware/gate-node/lib'
 ROLE_IP = {'gate': '192.168.1.237', 'house': '192.168.1.238'}
 SHARED = ('firmware_info.py', 'remote_link.py', 'intercom_session.py', 'intercom_audio.py', 'unlock_notice.py')
-GATE = ('mfrc522.py', 'rfid_debug.py', 'rfid_recovery.py', 'tag_presence.py')
+GATE = ('mfrc522.py', 'rfid_debug.py', 'rfid_recovery.py', 'tag_presence.py', 'pir_exit.py')
 
 
 def files_for(role):
     files = {'lib/' + name: LIB / name for name in SHARED}
     if role == 'gate':
         files.update({'lib/' + name: LIB / name for name in GATE})
+        files['test_pir_motion.py'] = ROOT / 'firmware/gate-node/test_pir_motion.py'
     files['chime.py'] = ROOT / 'firmware/house-node/chime.py'
     script = 'test_' + role + '_remote_unlock.py'
     files[script] = ROOT / ('firmware/' + role + '-node') / script
     return files
+
+
+def render_update(role):
+    info = ast.parse((LIB / 'firmware_info.py').read_text())
+    version = next(ast.literal_eval(node.value) for node in info.body
+                   if isinstance(node, ast.Assign) and any(
+                       isinstance(target, ast.Name) and target.id == 'VERSION'
+                       for target in node.targets))
+    files = []
+    for target, path in files_for(role).items():
+        content = path.read_bytes()
+        ast.parse(content, filename=str(path))
+        chunks = tuple(base64.b64encode(content[i:i + 768])
+                       for i in range(0, len(content), 768))
+        files.append(('/' + target, hashlib.sha256(content).hexdigest(), chunks))
+    template = (ROOT / 'tools/thonny_update_template.py').read_text()
+    rendered = template.replace('__ROLE__', repr(role)).replace('__VERSION__', repr(version))
+    rendered = rendered.replace('__EXPECTED_IP__', repr(ROLE_IP[role]))
+    rendered = rendered.replace('__FILES__', repr(files))
+    compile(rendered, '<thonny-updater>', 'exec')
+    return rendered
+
+
+def build_updates(output):
+    output.mkdir(parents=True, exist_ok=True)
+    for role in ROLE_IP:
+        path = output / ('update_' + role + '.py')
+        path.write_text(render_update(role))
+        print('Thonny updater:', path)
 
 
 def mpremote(args):
@@ -76,7 +107,7 @@ def verify_code(files, role):
         "  raise RuntimeError('Upload checksum mismatch: ' + name)\n"
         " print('Verified:', name)\n"
         "import lib.remote_link, lib.intercom_session, lib.intercom_audio, lib.unlock_notice, chime\n"
-        + ("import lib.mfrc522, lib.rfid_debug, lib.rfid_recovery, lib.tag_presence\n" if role == 'gate' else '')
+        + ("import lib.mfrc522, lib.rfid_debug, lib.rfid_recovery, lib.tag_presence, lib.pir_exit\n" if role == 'gate' else '')
         + "from lib.firmware_info import VERSION, report\n"
         + f"report({role!r}, VERSION)\n"
     )
@@ -104,6 +135,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     subs = parser.add_subparsers(dest='action', required=True)
     subs.add_parser('ports', help='List USB serial ports via mpremote')
+    bundle = subs.add_parser('bundle', help='Build two standalone F5 updaters for Thonny')
+    bundle.add_argument('--output', type=Path, default=ROOT / 'updates')
     upload = subs.add_parser('upload', help='Copy and verify every file for a role')
     upload.add_argument('role', choices=ROLE_IP)
     upload.add_argument('--port', required=True, help='USB path or id:serial from ports')
@@ -112,6 +145,9 @@ def main(argv=None):
     upload.add_argument('--run', action='store_true', help='Start application and follow logs')
     upload.add_argument('--dry-run', action='store_true', help='Print file mapping without connecting')
     args = parser.parse_args(argv)
+    if args.action == 'bundle':
+        build_updates(args.output)
+        return 0
     if args.action == 'upload' and args.dry_run:
         for target, path in files_for(args.role).items():
             print(str(path.relative_to(ROOT)) + ' -> /' + target)

@@ -20,3 +20,7 @@ secrets.py
 # Personal test recordings from the audio-wifi-relay debug harness - not
 # project content, see docs/audio.md
 tools/audio-wifi-relay/recordings/
+
+# Generated Thonny firmware update bundles
+/updates/
+__pycache__/

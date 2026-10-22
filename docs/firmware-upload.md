@@ -51,3 +51,33 @@ requires it; soft-reset is not equivalent to a power cycle.
 A preview without connecting is available with `--dry-run`. The corrected
 SOURCE code generation is covered by host-side tests. Actual hardware
 upload verification is still pending after the earlier SyntaxError report.
+
+## Update directly through two Thonny windows
+
+Run `python3 tools/firmware.py bundle` on the Mac after firmware changes.
+It generates ignored local artifacts `updates/update_gate.py` and
+`updates/update_house.py`, containing role-specific application files and
+SHA256 checksums. No mpremote dependency or USB port is needed to build.
+
+In the Thonny window for each board, choose Open > This computer, open the
+matching generated updater and press F5. The updater executes on the board,
+checks STATIC_IP before writes, leaves secrets.py/boot.py/main.py untouched,
+skips identical files and verifies changed files before renaming their
+per-file temporary replacements. It never clears the whole filesystem.
+A failed/interrupted multi-file update may leave mixed application versions;
+rerun the updater to complete it. Existing version checks detect mixing.
+Generated payloads contain no credentials and may use more interpreter
+memory than individual file transfers; actual board execution is pending.
+
+After SUCCESS, close old application editor tabs. Power-cycle each board,
+then use its Shell (not a Mac terminal) to start the installed application:
+
+```python
+exec(open('/test_gate_remote_unlock.py').read())
+```
+
+Use `/test_house_remote_unlock.py` in the house window. Settings including
+SOURCE are preserved; use `SOURCE = "auto"` in secrets.py for automatic AP
+selection. New application files require updating the single role manifest
+in tools/firmware.py, then rebuilding both updater artifacts. Neither an
+automatic boot script nor an automatic board restart is installed.
