@@ -1,5 +1,5 @@
 # House button: GPIO14 to GND. Upload lib/remote_link.py and this board's
-# secrets.py as well. Run manually in Thonny; microphone streaming is not started.
+# secrets.py as well. Run manually in Thonny; voice runs only while TALKING.
 
 import os
 from machine import Pin
@@ -7,11 +7,14 @@ from time import ticks_ms, ticks_diff, sleep_ms
 from lib.remote_link import RemoteLink
 from chime import Chime
 from lib.intercom_session import Session
+from lib.intercom_audio import Voice
 
 button = Pin(14, Pin.IN, Pin.PULL_UP)
 chime = Chime()
 link = RemoteLink()
 session = Session(link, chime, "house")
+voice = Voice(chime)
+session.voice = voice
 talk_button = Pin(18, Pin.IN, Pin.PULL_UP)
 talk_raw = talk_button.value()
 talk_stable = talk_raw
@@ -76,7 +79,9 @@ try:
                 attempts += 1
                 last_send = now
         session.poll()
-        sleep_ms(5)
+        voice.service(session)
+        sleep_ms(2)
 finally:
+    voice.stop()
     chime.close()
     link.close()

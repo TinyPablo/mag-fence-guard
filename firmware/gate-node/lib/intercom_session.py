@@ -1,4 +1,4 @@
-"""Call state control only; microphone audio is not enabled here."""
+"""Call control with session IDs, heartbeat and answer/hangup state."""
 
 import os
 from time import ticks_ms, ticks_diff
@@ -21,12 +21,15 @@ class Session:
         self.last_sent = None
         self.attempts = 0
         self.closed = []
+        self.voice = None
 
     def transition(self, state):
         self.state = state
         self.changed = ticks_ms()
         self.last_sent = None
-        print("CALL STATE:", state, "(control test; no voice audio)")
+        if state != "TALKING" and self.voice is not None and self.voice.running:
+            self.voice.stop()
+        print("CALL STATE:", state)
         if state == "RINGING":
             self.chime.ring()
         elif state in ("IDLE", "TALKING"):

@@ -18,22 +18,35 @@ class Chime:
             self.sound.extend(bytes(RATE * 80 // 1000 * 2))
         self.sound = memoryview(self.sound)
         self.position = len(self.sound)
+        self.speaker = None
+        self.resume()
+
+    def resume(self):
+        if self.speaker is not None:
+            return
         self.speaker = I2S(1, sck=Pin(7), ws=Pin(8), sd=Pin(9),
                            mode=I2S.TX, bits=16, format=I2S.MONO,
                            rate=RATE, ibuf=1024)
 
     def ring(self):
+        self.resume()
         self.position = 0
 
     def stop(self):
         self.position = len(self.sound)
 
     def poll(self):
-        if self.position < len(self.sound):
+        if self.speaker is not None and self.position < len(self.sound):
             end = min(self.position + 256, len(self.sound))
             written = self.speaker.write(self.sound[self.position:end])
             if written:
                 self.position += written
 
+    def release(self):
+        self.stop()
+        if self.speaker is not None:
+            self.speaker.deinit()
+            self.speaker = None
+
     def close(self):
-        self.speaker.deinit()
+        self.release()

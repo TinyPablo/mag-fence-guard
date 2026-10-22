@@ -1,4 +1,4 @@
-# Gate IRQ controller with UDP remote unlocking; audio is not started.
+# Gate IRQ controller with UDP remote unlocking; voice runs only while TALKING.
 # Preserved hardware checkpoint; see docs/progress.md for test results and
 # docs/rfid.md for earlier IRQ behavior. An IRQ does not prove tag presence;
 # opening requires a successful UID read and a whitelist match.
@@ -16,6 +16,7 @@ from lib import rfid_debug
 from lib.rfid_recovery import Recovery
 from lib.remote_link import RemoteLink
 from lib.intercom_session import Session
+from lib.intercom_audio import Voice
 from chime import Chime
 from time import ticks_add
 
@@ -107,6 +108,8 @@ recent_requests = []
 link = RemoteLink()
 chime = Chime()
 session = Session(link, chime, "gate")
+voice = Voice(chime)
+session.voice = voice
 recovery = Recovery(reader)
 reader.arm_irq()
 rfid_cycle_started = ticks_ms()
@@ -218,10 +221,12 @@ try:
             set_relay(unlocked)
             print("UNLOCKED" if unlocked else "LOCKED", "at", now)
 
-        sleep_ms(5)
+        voice.service(session)
+        sleep_ms(2)
 finally:
     button.irq(handler=None)
     rfid_irq.irq(handler=None)
     set_relay(False)
+    voice.stop()
     chime.close()
     link.close()
