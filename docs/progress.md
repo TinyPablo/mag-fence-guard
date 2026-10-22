@@ -444,3 +444,36 @@ latching, unlock ordering, buzzer priority/deadline, fresh event delivery,
 duplicate/expired/offline events, generated uploader code and credential
 preservation. Syntax and whitespace checks passed. Device upload and
 physical sound/access behavior remain pending hardware verification.
+
+### Thonny single-file updates prepared
+
+Added `tools/firmware.py bundle` and a standalone board updater template.
+Generated gate/house scripts can be opened locally in the respective Thonny
+windows and run with F5 to install the full role-specific release. Settings
+and boot files are preserved; wrong-board checks precede writes, identical
+files are skipped and changed files receive SHA256 verification. Generated
+artifacts live in ignored updates/. Twenty-six host tests pass, including
+execution of both generated bundles against simulated device filesystems,
+repeat-update skips and wrong-board refusal. Hardware execution is pending.
+
+## HC-SR501 standalone bring-up - hardware test pending
+
+Reported wiring: OUT GPIO13, VCC 5V, GND, jumper H. Updated
+`test_pir_motion.py` with explicit 60-second warm-up labeling, HIGH/LOW
+transition duration and a 10-second status heartbeat. Test identifier:
+`pir-test-0.1.0`. No PIR behavior has been added to the integrated controller.
+Gate upload manifests and generated Thonny updater include the standalone
+script. See `pir.md` for the adjustment and acceptance procedure.
+
+## 0.6.0 - integrated PIR exit prepared
+
+Reported standalone tuning produced approximately 1-2 seconds of HIGH.
+Added GPIO13 PIR exit requests for a 15-second unlock, with nonblocking
+60-second startup suppression, required LOW before arming and required
+post-lock LOW/HIGH before another request. Repeated movement during unlock
+is ignored. RFID/buttons/calls remain available during PIR warm-up. A
+current-interpreter-only test override can skip warm-up for an already
+stabilized sensor; normal default remains 60000 ms. House unlock notices
+accept source `pir`. Full version markers and Thonny bundles are 0.6.0.
+Thirty host tests pass, including warm-up HIGH suppression, no extension,
+post-lock rearming and PIR notification. Physical verification is pending.

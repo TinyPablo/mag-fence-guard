@@ -157,3 +157,11 @@ the relay's unlock interval and each new unlock produces one short house
 notification. Stop the house, unlock by tag, restart the house: no past buzz
 should play. RFID configuration recovery is still a workaround, not a fix
 for its underlying fault. All sound/notice behavior needs hardware checks.
+
+## Firmware 0.6.0 - PIR exit
+
+The inside-facing GPIO13 PIR now opens for 15 seconds after warm-up and a
+qualified LOW/HIGH cycle. It shares the unlock sound, call termination and
+house notification behavior; source is `pir`. Other access commands do not
+shorten an existing longer interval. All release markers are 0.6.0; gate adds
+`lib/pir_exit.py`. See `pir.md` for warm-up and the temporary test override.
