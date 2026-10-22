@@ -1,0 +1,22 @@
+#!/bin/sh
+# Replace em-dash (-) and en-dash (-) with a plain ASCII hyphen in staged
+# text files before each commit, then re-stage them. AI-assisted edits tend
+# to introduce these; this repo's convention is plain "-" only.
+
+for f in $(git diff --cached --name-only --diff-filter=ACM); do
+  [ -f "$f" ] || continue
+  case "$f" in
+    *.png|*.jpg|*.jpeg|*.gif|*.pdf|*.stl|*.3mf|*.bin) continue ;;
+  esac
+
+  before=$(git hash-object "$f")
+  perl -CSD -pi -e 's/\x{2014}/-/g; s/\x{2013}/-/g' "$f" 2>/dev/null
+  after=$(git hash-object "$f")
+
+  if [ "$before" != "$after" ]; then
+    git add "$f"
+    echo "pre-commit: replaced em/en-dash with '-' in $f"
+  fi
+done
+
+exit 0
