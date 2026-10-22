@@ -14,15 +14,47 @@ RETRY_MS = 10000
 WOULD_BLOCK = (errno.EAGAIN, getattr(errno, "EWOULDBLOCK", errno.EAGAIN))
 
 
+def format_bssid(value):
+    return ":".join("%02X" % b for b in value)
+
+
+def select_access_points(scan, ssid):
+    known = {binascii.unhexlify(value): name for name, value in BSSIDS.items()}
+    matches = {}
+    for record in scan:
+        name, bssid, _channel, rssi = record[:4]
+        if name == ssid.encode() and bssid in known:
+            if bssid not in matches or rssi > matches[bssid][2]:
+                matches[bssid] = (known[bssid], bssid, rssi)
+    return sorted(matches.values(), key=lambda entry: entry[2], reverse=True)
+
+
 class RemoteLink:
     def __init__(self):
-        if SOURCE not in BSSIDS:
-            raise ValueError('SOURCE must be "router" or "ap"')
+        if SOURCE not in ("auto", "router", "ap"):
+            raise ValueError('SOURCE must be "auto", "router" or "ap"')
         self.wlan = network.WLAN(network.STA_IF)
         self.wlan.active(False)
         self.wlan.active(True)
         self.wlan.ifconfig((STATIC_IP, "255.255.255.0", "192.168.1.1", "192.168.1.1"))
         self.wlan.config(pm=network.WLAN.PM_NONE)
+        self.candidates = []
+        self.selected = None
+        self.candidate_index = 0
+        if SOURCE == "auto":
+            print("WiFi scanning for configured router/repeater...")
+            try:
+                self.candidates = select_access_points(self.wlan.scan(), WIFI_SSID)
+            except OSError as error:
+                print("WiFi scan failed:", error)
+            for name, bssid, rssi in self.candidates:
+                print("WiFi candidate:", name, format_bssid(bssid), "RSSI:", rssi, "dBm")
+            if not self.candidates:
+                print("No known AP visible; retrying configured BSSIDs without scan")
+                self.candidates = [(name, binascii.unhexlify(value), None)
+                                   for name, value in BSSIDS.items()]
+        else:
+            self.candidates = [(SOURCE, binascii.unhexlify(BSSIDS[SOURCE]), None)]
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("0.0.0.0", CONTROL_PORT))
         self.sock.setblocking(False)
@@ -36,8 +68,9 @@ class RemoteLink:
         if connected != self.connected:
             print("WiFi connected" if connected else "WiFi disconnected")
             if connected:
-                print("IP:", self.wlan.ifconfig()[0], "source:", SOURCE,
-                      "BSSID (enforced):", BSSIDS[SOURCE],
+                print("IP:", self.wlan.ifconfig()[0], "mode:", SOURCE,
+                      "source:", self.selected[0],
+                      "BSSID (enforced):", format_bssid(self.selected[1]),
                       "RSSI:", self.wlan.status("rssi"), "dBm")
             self.connected = connected
         now = ticks_ms()
@@ -46,8 +79,10 @@ class RemoteLink:
             self.last_attempt = now
             try:
                 self.wlan.disconnect()
-                self.wlan.connect(WIFI_SSID, WIFI_PASSWORD,
-                                  bssid=binascii.unhexlify(BSSIDS[SOURCE]))
+                self.selected = self.candidates[self.candidate_index]
+                self.candidate_index = (self.candidate_index + 1) % len(self.candidates)
+                print("WiFi connecting:", self.selected[0], format_bssid(self.selected[1]))
+                self.wlan.connect(WIFI_SSID, WIFI_PASSWORD, bssid=self.selected[1])
             except OSError as error:
                 self.error(error)
 
@@ -82,3 +117,6 @@ class RemoteLink:
 
     def close(self):
         self.sock.close()
+
+
+MODULE_VERSION = "0.4.0"

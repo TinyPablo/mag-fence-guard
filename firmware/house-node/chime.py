@@ -74,3 +74,6 @@ class Chime:
 
     def close(self):
         self.release()
+
+
+MODULE_VERSION = "0.4.0"

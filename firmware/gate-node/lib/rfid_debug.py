@@ -75,3 +75,6 @@ def probe(reader, seconds=10):
         reader.disarm_irq()
         print("Probe finished; successful reads:", reads)
     return reads
+
+
+MODULE_VERSION = "0.4.0"

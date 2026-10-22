@@ -8,6 +8,11 @@
 #   Relay: GPIO15 -> relay IN; magnet through COM/NC, flyback diode across magnet
 #   RFID: SCK=12, MOSI=11, MISO=10, CS=17, RST=16, IRQ=21
 
+from lib.firmware_info import report
+
+SCRIPT_VERSION = "0.4.0"
+print("FIRMWARE starting: role=gate version=" + SCRIPT_VERSION)
+
 import micropython
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
@@ -19,6 +24,8 @@ from lib.intercom_session import Session
 from lib.intercom_audio import Voice
 from chime import Chime
 from time import ticks_add
+
+report("gate", SCRIPT_VERSION)
 
 micropython.alloc_emergency_exception_buf(100)
 

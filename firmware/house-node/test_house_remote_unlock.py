@@ -1,6 +1,11 @@
 # House button: GPIO14 to GND. Upload lib/remote_link.py and this board's
 # secrets.py as well. Run manually in Thonny; voice runs only while TALKING.
 
+from lib.firmware_info import report
+
+SCRIPT_VERSION = "0.4.0"
+print("FIRMWARE starting: role=house version=" + SCRIPT_VERSION)
+
 import os
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
@@ -8,6 +13,8 @@ from lib.remote_link import RemoteLink
 from chime import Chime
 from lib.intercom_session import Session
 from lib.intercom_audio import Voice
+
+report("house", SCRIPT_VERSION)
 
 button = Pin(14, Pin.IN, Pin.PULL_UP)
 chime = Chime()

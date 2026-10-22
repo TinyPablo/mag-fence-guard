@@ -84,3 +84,6 @@ class Recovery:
         except OSError as error:
             self.fail(error)
         return True
+
+
+MODULE_VERSION = "0.4.0"

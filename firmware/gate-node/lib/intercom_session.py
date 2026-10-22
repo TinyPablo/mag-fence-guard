@@ -139,3 +139,6 @@ class Session:
                 else:
                     self.link.send(b"PING " + self.call_id)
                 self.last_sent = now
+
+
+MODULE_VERSION = "0.4.0"

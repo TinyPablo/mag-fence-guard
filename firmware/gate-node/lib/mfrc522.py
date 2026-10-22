@@ -304,3 +304,6 @@ class MFRC522:
 				stat = self.ERR
 
 		return stat
+
+
+MODULE_VERSION = "0.4.0"

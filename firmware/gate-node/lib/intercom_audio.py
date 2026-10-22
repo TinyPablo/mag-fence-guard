@@ -175,3 +175,6 @@ class Voice:
                 session.end()
             else:
                 session.finish()
+
+
+MODULE_VERSION = "0.4.0"
