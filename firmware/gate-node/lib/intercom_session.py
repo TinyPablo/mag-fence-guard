@@ -31,7 +31,7 @@ class Session:
             self.voice.stop()
         print("CALL STATE:", state)
         if state == "RINGING":
-            self.chime.ring()
+            self.chime.ring(repeat=True)
         elif state in ("IDLE", "TALKING"):
             self.chime.stop()
 
