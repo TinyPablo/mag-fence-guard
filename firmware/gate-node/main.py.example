@@ -1,0 +1,14 @@
+# Install as /main.py only after testing the GPIO14 startup service bypass.
+# Keep /boot.py free of application loops and imports.
+
+import sys
+
+try:
+    import test_gate_remote_unlock
+except SystemExit:
+    pass  # Requested service mode leaves the REPL available.
+except KeyboardInterrupt:
+    print("Application interrupted; REPL available")
+except Exception as error:
+    sys.print_exception(error)
+    print("Application failed; REPL available")

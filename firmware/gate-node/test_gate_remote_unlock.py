@@ -9,9 +9,14 @@
 #   PIR: OUT=GPIO13, VCC=5V, GND=GND, jumper H
 #   RFID: SCK=12, MOSI=11, MISO=10, CS=17, RST=16, IRQ=21
 
+from lib.service_mode import service_requested
+
+if service_requested("gate"):
+    raise SystemExit
+
 from lib.firmware_info import report
 
-SCRIPT_VERSION = "0.6.0"
+SCRIPT_VERSION = "0.6.1"
 print("FIRMWARE starting: role=gate version=" + SCRIPT_VERSION)
 
 import micropython
