@@ -8,6 +8,7 @@
 #   Relay: GPIO15 -> relay IN; magnet through COM/NC, flyback diode across magnet
 #   RFID: SCK=12, MOSI=11, MISO=10, CS=17, RST=16, IRQ=21
 
+import os
 import micropython
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
@@ -50,6 +51,7 @@ last_button_irq_ms = 0
 unlock_until = 0
 unlocked = False
 tag_ready = False
+call_pressed = False
 
 
 def report(msg):
@@ -57,15 +59,14 @@ def report(msg):
 
 
 def on_button(pin):
-    global last_button_irq_ms, unlock_until
+    global last_button_irq_ms, call_pressed
     now = ticks_ms()
     if pin.value() != 0:
         return
     if ticks_diff(now, last_button_irq_ms) < DEBOUNCE_MS:
         return
     last_button_irq_ms = now
-    unlock_until = ticks_add(ticks_ms(), UNLOCK_MS)
-    micropython.schedule(report, "button pressed, unlocking")
+    call_pressed = True
 
 
 def on_rfid_irq(pin):
@@ -82,16 +83,50 @@ last_rfid_arm_ms = ticks_ms()
 # A bounded cache covers all retries from the house script (under 2 seconds).
 recent_requests = []
 link = RemoteLink()
+pending_call = None
+call_attempts = 0
+last_call_send = 0
+last_call_started = None
+
+
+def handle_call():
+    global call_pressed, pending_call, call_attempts, last_call_send, last_call_started
+    now = ticks_ms()
+    if call_pressed:
+        call_pressed = False
+        if pending_call is not None or (last_call_started is not None and
+                                       ticks_diff(now, last_call_started) < 1000):
+            print("Call press ignored: pending or cooldown")
+        elif not link.wlan.isconnected():
+            print("No WiFi; call not queued")
+        else:
+            pending_call = os.urandom(12).hex().encode()
+            call_attempts = 0
+            last_call_started = now
+            print("Calling house:", pending_call.decode())
+    if pending_call is not None and (call_attempts == 0 or
+                                    ticks_diff(now, last_call_send) >= 500):
+        if call_attempts >= 4:
+            print("No call confirmation; delivery unknown")
+            pending_call = None
+        else:
+            link.send(b"CALL " + pending_call)
+            call_attempts += 1
+            last_call_send = now
 
 
 def handle_remote():
-    global unlock_until, unlocked
+    global unlock_until, unlocked, pending_call
     link.poll()
     # Bound work per loop so network traffic cannot starve local control.
     for _ in range(4):
         packet = link.receive()
         if packet is None:
             break
+        if pending_call is not None and packet == b"RING_ACK " + pending_call:
+            print("House confirmed chime:", pending_call.decode())
+            pending_call = None
+            continue
         if not packet.startswith(b"OPEN "):
             continue
         request_id = packet[5:]
@@ -113,11 +148,12 @@ def handle_remote():
         link.send(b"ACK " + request_id)
 
 
-print("Gate control ready - button GPIO%d, RFID IRQ GPIO%d, relay GPIO%d." % (BUTTON_PIN, RFID_IRQ_PIN, RELAY_PIN))
+print("Gate control ready - call button GPIO%d, RFID IRQ GPIO%d, relay GPIO%d." % (BUTTON_PIN, RFID_IRQ_PIN, RELAY_PIN))
 
 try:
     while True:
         handle_remote()
+        handle_call()
         now = ticks_ms()
 
         if tag_ready:

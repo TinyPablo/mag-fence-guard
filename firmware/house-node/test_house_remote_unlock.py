@@ -1,13 +1,16 @@
 # House button: GPIO14 to GND. Upload lib/remote_link.py and this board's
-# secrets.py as well. Run manually in Thonny; audio is not started.
+# secrets.py as well. Run manually in Thonny; microphone streaming is not started.
 
 import os
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
 from lib.remote_link import RemoteLink
+from chime import Chime
 
 button = Pin(14, Pin.IN, Pin.PULL_UP)
+chime = Chime()
 link = RemoteLink()
+recent_calls = []
 DEBOUNCE_MS = 50
 RETRY_MS = 500
 MAX_ATTEMPTS = 4
@@ -22,6 +25,7 @@ print("House ready - button GPIO14; control UDP port 5007")
 try:
     while True:
         link.poll()
+        chime.poll()
         now = ticks_ms()
         state = button.value()
         if state != raw_state:
@@ -44,6 +48,19 @@ try:
             packet = link.receive()
             if packet is None:
                 break
+            if packet.startswith(b"CALL "):
+                call_id = packet[5:]
+                if len(call_id) != 24 or any(c not in b"0123456789abcdef" for c in call_id):
+                    continue
+                recent_calls[:] = [(key, at) for key, at in recent_calls
+                                   if ticks_diff(now, at) < 10000]
+                if not any(key == call_id for key, _ in recent_calls):
+                    if len(recent_calls) >= 32:
+                        continue
+                    recent_calls.append((call_id, now))
+                    chime.ring()
+                    print("Gate call - ringing:", call_id.decode())
+                link.send(b"RING_ACK " + call_id)
             if pending is not None and packet == b"ACK " + pending:
                 print("Gate confirmed unlock:", pending.decode())
                 pending = None
@@ -58,4 +75,5 @@ try:
                 last_send = now
         sleep_ms(5)
 finally:
+    chime.close()
     link.close()

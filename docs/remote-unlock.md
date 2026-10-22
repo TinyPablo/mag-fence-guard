@@ -67,3 +67,25 @@ intended for the existing trusted LAN test.
 - Stop and restart each script. Check relay state and retry behavior.
 
 The scripts have not yet been verified on the ESP32 hardware.
+
+## Gate calling extension
+
+The latest remote scripts replace the gate button's temporary unlock
+function with calling the house. Upload the updated gate and house scripts,
+plus `firmware/house-node/chime.py` to `/chime.py` on the house board.
+The house amplifier uses the existing audio wiring: Vin 5V, GND, BCLK GPIO7,
+LRC GPIO8, DIN GPIO9, SD 3V3, GAIN unconnected, speaker on amplifier outputs.
+Do not run the duplex audio script at the same time: both use I2S1.
+
+A gate press sends `CALL <id>`; the house starts a two-tone chime and sends
+`RING_ACK <id>`. Duplicate packets are acknowledged without replaying the
+chime. A new call can restart a playing chime. The gate applies a one-second
+cooldown and up to four attempts 500 ms apart. The confirmation reports
+software acceptance, not measured speaker output. The house button still
+sends `OPEN`; RFID still unlocks locally. The preceding checklist's local
+button-unlock expectation applies only to the initial version.
+
+Verify a gate press rings the house without releasing the magnet, a house
+press opens the gate during/after ringing, RFID still opens, and a held gate
+button does not continuously ring. Then test a disconnected house: gate
+presses must not release the lock and RFID must remain operational.

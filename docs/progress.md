@@ -179,3 +179,23 @@ the local RFID/button loop. Audio and automatic startup remain separate.
 See `remote-unlock.md` for uploads, wiring, behavior, and the test checklist.
 Hardware confirmation is pending; the existing gate and audio checkpoint
 scripts remain unchanged.
+
+## 2026-10-22 - remote unlocking confirmed
+
+Hardware test confirmed opening from both buttons and RFID in the initial
+remote-unlock version. Gate: `192.168.1.237`, router BSSID
+`D4:B7:09:CA:45:36`, RSSI -63 dBm. House: `192.168.1.238`, repeater BSSID
+`08:8A:F1:D9:D4:5E`, RSSI -53 dBm. Three remote request IDs had matching
+house confirmations and gate unlock logs. Loss/recovery tests and extended
+stability are not yet confirmed.
+
+## Gate calling and house chime - hardware test pending
+
+The current remote scripts now give the gate button its intended calling
+role: it sends `CALL` and no longer unlocks locally. RFID and the house
+button still unlock. House `chime.py` plays two short tones through the
+existing MAX98357A speaker wiring (BCLK7/LRC8/DIN9); the microphone stays
+unused. Upload `chime.py` alongside the house script. Calls use retries,
+acknowledgements, a 10-second duplicate cache, and a one-second gate-side
+cooldown. Offline calls are not queued. This change does not alter the
+preserved standalone gate test scripts.
