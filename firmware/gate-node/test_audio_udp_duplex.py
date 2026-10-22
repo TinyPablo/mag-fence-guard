@@ -10,11 +10,7 @@
 # read the mic again - otherwise incoming audio would lag behind by however
 # many chunks arrived faster than we drained them.
 #
-# Prints a level meter bar for the RECEIVED audio only (not the local mic) -
-# this is deliberate for diagnosing one-way-only audio: if the bar moves,
-# the peer's mic and the network path are both fine and the problem is on
-# this board's speaker/wiring; if the bar stays flat, the problem is
-# upstream (the peer's mic, or the link to it).
+# Wi-Fi diagnostics run once at startup; audio streaming stays quiet.
 #
 # Wiring (both mic AND speaker on every board now):
 #   INMP441:  VDD=3.3V, GND=GND, L/R=GND, WS=GPIO4, SCK=GPIO5, SD=GPIO6
@@ -29,17 +25,26 @@
 # PEER_PORT is the same number on both boards - each listens on it locally
 # AND sends to the peer on it.
 
+import binascii
 import network
 import socket
 import uarray as array
 from machine import Pin, I2S
 from time import sleep_ms, ticks_ms, ticks_diff
 
-from secrets import WIFI_SSID, WIFI_PASSWORD, STATIC_IP, PEER_IP, PEER_PORT
+from secrets import WIFI_SSID, WIFI_PASSWORD, STATIC_IP, PEER_IP, PEER_PORT, SOURCE
 
 NETMASK = "255.255.255.0"
 GATEWAY = "192.168.1.1"
 DNS = "192.168.1.1"
+CONNECT_TIMEOUT_MS = 20000
+BSSIDS = {
+    "router": "D4:B7:09:CA:45:36",
+    "ap": "08:8A:F1:D9:D4:5E",
+}
+if SOURCE not in BSSIDS:
+    raise ValueError('SOURCE must be "ap" or "router"')
+selected_bssid = binascii.unhexlify(BSSIDS[SOURCE].replace(":", ""))
 
 MIC_SCK_PIN = 5
 MIC_WS_PIN = 4
@@ -52,19 +57,49 @@ SPK_SD_PIN = 9
 RATE = 16000
 CHUNK_SAMPLES = 256
 
-METER_WIDTH = 40
-METER_INTERVAL_MS = 150
+def format_bssid(value):
+    return ":".join("%02X" % byte for byte in value)
+
+
+def show_access_points(wlan):
+    print("Visible access points for SSID:", WIFI_SSID)
+    try:
+        matches = [ap for ap in wlan.scan() if ap[0] == WIFI_SSID.encode()]
+        for ssid, bssid, channel, rssi, *_ in sorted(
+                matches, key=lambda ap: ap[3], reverse=True):
+            print("  SSID: %s | BSSID: %s | RSSI: %d dBm | channel: %d" %
+                  (ssid.decode(), format_bssid(bssid), rssi, channel))
+        if not matches:
+            print("  No matching access points found.")
+    except (OSError, ValueError) as error:
+        print("  Scan unavailable:", error)
+
+
+def show_connection(wlan):
+    print("WiFi connected, IP:", wlan.ifconfig()[0])
+    print("  SSID:", wlan.config("essid"))
+    print("  Selected source:", SOURCE)
+    print("  BSSID (enforced):", BSSIDS[SOURCE])
+    print("  Connected RSSI: %d dBm" % wlan.status("rssi"))
+
 
 wlan = network.WLAN(network.STA_IF)
+# Reset the interface so a Thonny rerun cannot retain the previous AP.
+wlan.active(False)
 wlan.active(True)
+show_access_points(wlan)
 wlan.ifconfig((STATIC_IP, NETMASK, GATEWAY, DNS))
-if not wlan.isconnected():
-    print("Connecting to WiFi:", WIFI_SSID, "...")
-    wlan.connect(WIFI_SSID, WIFI_PASSWORD)
-    while not wlan.isconnected():
-        sleep_ms(200)
+print("Connecting to WiFi: %s | source: %s | BSSID: %s" %
+      (WIFI_SSID, SOURCE, BSSIDS[SOURCE]))
+wlan.connect(WIFI_SSID, WIFI_PASSWORD, bssid=selected_bssid)
+connect_started = ticks_ms()
+while not wlan.isconnected():
+    if ticks_diff(ticks_ms(), connect_started) >= CONNECT_TIMEOUT_MS:
+        wlan.disconnect()
+        raise RuntimeError("WiFi connection timed out for source: " + SOURCE)
+    sleep_ms(200)
 wlan.config(pm=network.WLAN.PM_NONE)
-print("WiFi connected, IP:", wlan.ifconfig()[0])
+show_connection(wlan)
 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 sock.bind(('0.0.0.0', PEER_PORT))
@@ -80,10 +115,7 @@ speaker = I2S(1, sck=Pin(SPK_SCK_PIN), ws=Pin(SPK_WS_PIN), sd=Pin(SPK_SD_PIN),
 samples32 = array.array('i', [0] * CHUNK_SAMPLES)
 samples16 = array.array('h', [0] * CHUNK_SAMPLES)
 
-meter_peak = 0
-last_meter_print = ticks_ms()
-
-print("Duplex running - '#' bar below shows RECEIVED audio level - Ctrl+C to stop")
+print("Duplex running - Ctrl+C to stop")
 try:
     while True:
         mic.readinto(samples32)
@@ -97,19 +129,6 @@ try:
             except OSError:
                 break
             speaker.write(packet)
-            received = array.array('h', packet)
-            for s in received:
-                if s < 0:
-                    s = -s
-                if s > meter_peak:
-                    meter_peak = s
-
-        now = ticks_ms()
-        if ticks_diff(now, last_meter_print) >= METER_INTERVAL_MS:
-            bar_len = min(METER_WIDTH, meter_peak * METER_WIDTH // 32768)
-            print("#" * bar_len)
-            meter_peak = 0
-            last_meter_print = now
 except KeyboardInterrupt:
     pass
 finally:

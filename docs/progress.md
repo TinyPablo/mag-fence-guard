@@ -56,7 +56,18 @@ working on both boards. The hardware was subsequently disconnected for
 the gate control tests. The exact firmware revision and network conditions
 of that successful audio test have not been re-established.
 
-## Next checkpoint - restore two-board UDP audio
+## 2026-10-22 - two-board audio retest confirmed
+
+The restored two-board audio setup works, as reported after the retest.
+The connected access points and repeater behavior are not yet identified.
+Startup diagnostics now list visible BSSIDs for the configured SSID and
+print the connected SSID, IP, and RSSI once. Connected BSSID is printed
+only if supported by the firmware; scan results alone do not identify the
+connected access point. The continuous received-audio meter was removed.
+Startup diagnostics were exercised on hardware; explicit BSSID selection
+was subsequently reported working in the router/repeater audio test.
+
+## Audio setup and network test checklist
 
 Use `firmware/gate-node/test_audio_udp_duplex.py` on both boards. Upload
 each board's own `secrets.py`; keep credentials out of this document.
@@ -110,8 +121,9 @@ behavior have not yet been verified.
   successful fresh connection as proof of automatic roaming.
 
 The current audio script connects at startup, assigns a static IP, and
-does not explicitly select a BSSID or implement application-level
-reconnection handling. Roaming and recovery remain test questions.
+pins the connection to the configured BSSID as described below. It does
+not implement application-level reconnection handling or automatic
+switching between access points. Recovery remains unverified.
 
 ## Following stages
 
@@ -122,3 +134,19 @@ reconnection handling. Roaming and recovery remain test questions.
 3. Prepare standalone ESP32 power and recoverable automatic startup.
 
 HC-SR501 motion sensing is deferred and does not block these stages.
+
+### Explicit access point selection
+
+`secrets.py` now requires `SOURCE = "router"` or `SOURCE = "ap"` for the
+UDP duplex script. Router BSSID: `D4:B7:09:CA:45:36`; repeater (`ap`)
+BSSID: `08:8A:F1:D9:D4:5E`. The script resets Wi-Fi at startup and pins
+its connection to the selected BSSID, with a 20-second connection timeout
+and no fallback. Startup output identifies the enforced BSSID and RSSI.
+Test one board on each source with distinct static IPs and reciprocal
+peer IPs. On 2026-10-22, audio with one board selecting the router and
+the other selecting the repeater was reported working. Long-duration
+stability and recovery after connection loss remain unverified.
+
+The first diagnostic run reported `ENOMEM` during audio streaming. Its
+cause remains unresolved; successful Wi-Fi connection alone does not
+confirm stable audio.
