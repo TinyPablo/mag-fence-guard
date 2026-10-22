@@ -6,11 +6,16 @@ from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
 from lib.remote_link import RemoteLink
 from chime import Chime
+from lib.intercom_session import Session
 
 button = Pin(14, Pin.IN, Pin.PULL_UP)
 chime = Chime()
 link = RemoteLink()
-recent_calls = []
+session = Session(link, chime, "house")
+talk_button = Pin(18, Pin.IN, Pin.PULL_UP)
+talk_raw = talk_button.value()
+talk_stable = talk_raw
+talk_changed = ticks_ms()
 DEBOUNCE_MS = 50
 RETRY_MS = 500
 MAX_ATTEMPTS = 4
@@ -21,12 +26,20 @@ raw_state = button.value()
 stable_state = raw_state
 changed_at = ticks_ms()
 
-print("House ready - button GPIO14; control UDP port 5007")
+print("House ready - open GPIO14, talk GPIO18; control UDP port 5007")
 try:
     while True:
         link.poll()
         chime.poll()
         now = ticks_ms()
+        talk_state = talk_button.value()
+        if talk_state != talk_raw:
+            talk_raw = talk_state
+            talk_changed = now
+        if talk_state != talk_stable and ticks_diff(now, talk_changed) >= DEBOUNCE_MS:
+            talk_stable = talk_state
+            if talk_state == 0:
+                session.talk_button()
         state = button.value()
         if state != raw_state:
             raw_state = state
@@ -40,6 +53,7 @@ try:
                     print("No WiFi; press again after connection")
                 else:
                     # A fresh random ID prevents collisions across board restarts.
+                    session.end()
                     pending = os.urandom(12).hex().encode()
                     attempts = 0
                     print("Unlock requested:", pending.decode())
@@ -48,19 +62,7 @@ try:
             packet = link.receive()
             if packet is None:
                 break
-            if packet.startswith(b"CALL "):
-                call_id = packet[5:]
-                if len(call_id) != 24 or any(c not in b"0123456789abcdef" for c in call_id):
-                    continue
-                recent_calls[:] = [(key, at) for key, at in recent_calls
-                                   if ticks_diff(now, at) < 10000]
-                if not any(key == call_id for key, _ in recent_calls):
-                    if len(recent_calls) >= 32:
-                        continue
-                    recent_calls.append((call_id, now))
-                    chime.ring()
-                    print("Gate call - ringing:", call_id.decode())
-                link.send(b"RING_ACK " + call_id)
+            session.receive(packet)
             if pending is not None and packet == b"ACK " + pending:
                 print("Gate confirmed unlock:", pending.decode())
                 pending = None
@@ -73,6 +75,7 @@ try:
                 link.send(b"OPEN " + pending)
                 attempts += 1
                 last_send = now
+        session.poll()
         sleep_ms(5)
 finally:
     chime.close()

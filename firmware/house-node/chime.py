@@ -25,6 +25,9 @@ class Chime:
     def ring(self):
         self.position = 0
 
+    def stop(self):
+        self.position = len(self.sound)
+
     def poll(self):
         if self.position < len(self.sound):
             end = min(self.position + 256, len(self.sound))

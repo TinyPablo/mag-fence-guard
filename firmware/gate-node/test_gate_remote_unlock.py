@@ -8,12 +8,15 @@
 #   Relay: GPIO15 -> relay IN; magnet through COM/NC, flyback diode across magnet
 #   RFID: SCK=12, MOSI=11, MISO=10, CS=17, RST=16, IRQ=21
 
-import os
 import micropython
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
 from lib.mfrc522 import MFRC522
+from lib import rfid_debug
+from lib.rfid_recovery import Recovery
 from lib.remote_link import RemoteLink
+from lib.intercom_session import Session
+from chime import Chime
 from time import ticks_add
 
 micropython.alloc_emergency_exception_buf(100)
@@ -24,6 +27,8 @@ RFID_IRQ_PIN = 21
 DEBOUNCE_MS = 50
 UNLOCK_MS = 3000
 RFID_RETRY_MS = 200
+RFID_DIAGNOSTIC_MS = 5000
+RFID_RESPONSE_MS = 40
 RELAY_ACTIVE_HIGH = True
 
 WHITELIST = {
@@ -39,6 +44,18 @@ button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
 relay = Pin(RELAY_PIN, Pin.OUT)
 rfid_irq = Pin(RFID_IRQ_PIN, Pin.IN, Pin.PULL_UP)
 reader = MFRC522(sck=12, mosi=11, miso=10, rst=16, cs=17)
+
+
+def rfid_status():
+    return rfid_debug.status(reader)
+
+
+def rfid_reset(hardware=False):
+    return rfid_debug.reset(reader, hardware)
+
+
+def rfid_probe(seconds=10):
+    return rfid_debug.probe(reader, seconds)
 
 
 def set_relay(energized):
@@ -77,56 +94,42 @@ def on_rfid_irq(pin):
 button.irq(trigger=Pin.IRQ_FALLING, handler=on_button)
 rfid_irq.irq(trigger=Pin.IRQ_FALLING, handler=on_rfid_irq)
 
-reader.arm_irq()
-last_rfid_arm_ms = ticks_ms()
+last_rfid_diagnostic_ms = ticks_ms()
+rfid_irq_count = 0
+rfid_read_count = 0
+rfid_stage = "request"
+rfid_cycle_started = ticks_ms()
+rfid_stage_started = rfid_cycle_started
+rfid_max_service_ms = 0
 
 # A bounded cache covers all retries from the house script (under 2 seconds).
 recent_requests = []
 link = RemoteLink()
-pending_call = None
-call_attempts = 0
-last_call_send = 0
-last_call_started = None
+chime = Chime()
+session = Session(link, chime, "gate")
+recovery = Recovery(reader)
+reader.arm_irq()
+rfid_cycle_started = ticks_ms()
+rfid_stage_started = rfid_cycle_started
 
 
 def handle_call():
-    global call_pressed, pending_call, call_attempts, last_call_send, last_call_started
-    now = ticks_ms()
+    global call_pressed
     if call_pressed:
         call_pressed = False
-        if pending_call is not None or (last_call_started is not None and
-                                       ticks_diff(now, last_call_started) < 1000):
-            print("Call press ignored: pending or cooldown")
-        elif not link.wlan.isconnected():
-            print("No WiFi; call not queued")
-        else:
-            pending_call = os.urandom(12).hex().encode()
-            call_attempts = 0
-            last_call_started = now
-            print("Calling house:", pending_call.decode())
-    if pending_call is not None and (call_attempts == 0 or
-                                    ticks_diff(now, last_call_send) >= 500):
-        if call_attempts >= 4:
-            print("No call confirmation; delivery unknown")
-            pending_call = None
-        else:
-            link.send(b"CALL " + pending_call)
-            call_attempts += 1
-            last_call_send = now
+        session.call()
+    session.poll()
 
 
 def handle_remote():
-    global unlock_until, unlocked, pending_call
+    global unlock_until, unlocked
     link.poll()
     # Bound work per loop so network traffic cannot starve local control.
     for _ in range(4):
         packet = link.receive()
         if packet is None:
             break
-        if pending_call is not None and packet == b"RING_ACK " + pending_call:
-            print("House confirmed chime:", pending_call.decode())
-            pending_call = None
-            continue
+        session.receive(packet)
         if not packet.startswith(b"OPEN "):
             continue
         request_id = packet[5:]
@@ -154,23 +157,60 @@ try:
     while True:
         handle_remote()
         handle_call()
+        chime.poll()
         now = ticks_ms()
 
-        if tag_ready:
+        # IRQ is a hint only: inspect RxIRq, never run blocking anticoll()
+        # merely because the GPIO fired. Both exchanges advance across loops.
+        service_started = ticks_ms()
+        if recovery.poll():
+            rfid_stage = "recovery"
             tag_ready = False
-            reader.disarm_irq()
-            status, raw_uid = reader.anticoll()
-            if status == reader.OK:
-                uid = "-".join("{:02X}".format(b) for b in raw_uid[:4])
-                known = uid in WHITELIST
-                print("Tag UID:", uid, "known:", known)
-                if known:
-                    unlock_until = ticks_add(ticks_ms(), UNLOCK_MS)
-            reader.arm_irq()
-            last_rfid_arm_ms = ticks_ms()
-        elif ticks_diff(now, last_rfid_arm_ms) > RFID_RETRY_MS:
-            reader.arm_irq()
-            last_rfid_arm_ms = now
+        else:
+            if rfid_stage == "recovery":
+                tag_ready = False
+                reader.arm_irq()
+                rfid_stage = "request"
+                rfid_cycle_started = ticks_ms()
+                rfid_stage_started = rfid_cycle_started
+            if tag_ready:
+                rfid_irq_count += 1
+                tag_ready = False
+            if rfid_stage in ("request", "uid"):
+                if reader.irq_received():
+                    if rfid_stage == "request":
+                        reader.start_anticoll_irq()
+                        rfid_stage = "uid"
+                        rfid_stage_started = ticks_ms()
+                    else:
+                        status, raw_uid = reader.finish_anticoll_irq()
+                        reader.disarm_irq()
+                        rfid_stage = "wait"
+                        if status == reader.OK:
+                            rfid_read_count += 1
+                            uid = "-".join("{:02X}".format(b) for b in raw_uid[:4])
+                            known = uid in WHITELIST
+                            print("Tag UID:", uid, "known:", known)
+                            if known:
+                                unlock_until = ticks_add(ticks_ms(), UNLOCK_MS)
+                elif ticks_diff(now, rfid_stage_started) >= RFID_RESPONSE_MS:
+                    reader.disarm_irq()
+                    rfid_stage = "wait"
+            if rfid_stage == "wait" and ticks_diff(now, rfid_cycle_started) >= RFID_RETRY_MS:
+                reader.arm_irq()
+                rfid_stage = "request"
+                rfid_cycle_started = ticks_ms()
+                rfid_stage_started = rfid_cycle_started
+        rfid_max_service_ms = max(rfid_max_service_ms,
+                                  ticks_diff(ticks_ms(), service_started))
+
+        if ticks_diff(now, last_rfid_diagnostic_ms) >= RFID_DIAGNOSTIC_MS:
+            print("RFID diagnostic: IRQ=%d reads=%d pin=%d flags=0x%02X stage=%s max_ms=%d resets=%d restored=%d failures=%d" %
+                  (rfid_irq_count, rfid_read_count, rfid_irq.value(),
+                   reader._rreg(0x04), rfid_stage, rfid_max_service_ms,
+                   recovery.attempts, recovery.restored, recovery.failures))
+            last_rfid_diagnostic_ms = now
+            rfid_max_service_ms = 0
 
         should_unlock = ticks_diff(unlock_until, now) > 0
         if should_unlock != unlocked:
@@ -183,4 +223,5 @@ finally:
     button.irq(handler=None)
     rfid_irq.irq(handler=None)
     set_relay(False)
+    chime.close()
     link.close()
