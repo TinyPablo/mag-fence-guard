@@ -79,3 +79,25 @@ The house session expires after 30 seconds; each chime also independently
 limits repetition to 30 seconds. Upload updated `/chime.py` and
 `/lib/intercom_session.py` on both boards. Gate stop follows receipt of the
 house state update (normally within the 500 ms heartbeat interval).
+
+## Diagnosing absent or one-way voice
+
+Both scripts now identify their audio version and role at startup:
+`VOICE module ready: voice-v2-diagnostics role: gate` (or `house`).
+If this is absent, the updated application/module pair has not reached
+initialization; collect preceding errors and check uploaded files.
+
+Unlike the standalone duplex test, integrated voice starts only in TALKING
+and uses I2S callbacks rather than blocking reads/writes. The sample rate,
+pinout and 32-to-16-bit sample conversion are retained. Audio packets now
+also require matching call IDs and sequence headers, so the standalone and
+integrated audio scripts must not be mixed across boards.
+
+Every five seconds, including outside TALKING, VOICE status prints role,
+state, Wi-Fi status and whether audio is running. During TALKING it also
+reports microphone callback count, sent packets, raw received datagrams,
+accepted packets and rejected packets. Compare matching `VOICE started`
+call IDs and status lines from both boards. Zero callbacks locates a capture
+completion problem; zero datagrams with a sending peer points toward the
+transport; received datagrams with rejects indicates peer/header/sequence
+filtering. These counters narrow diagnosis, not prove the hardware cause.

@@ -397,3 +397,15 @@ with a pause between pairs and a 30-second local limit. Answer/open/end
 stops and releases the speaker, discarding queued chime samples before
 voice takes ownership. Six host-side tests pass, including repetition,
 timeout, immediate stop/reopen and existing voice lifecycle/transport checks.
+
+### Integrated audio failure report - diagnosis pending
+
+Voice was reported absent even before the repeated-chime change. House
+reported sent packets and zero accepted receives; no gate audio counters
+were reported. The submitted peer IPs and ports are reciprocal and match.
+The cause is not yet established. Added role/version startup identification,
+state/Wi-Fi/running status even when audio is inactive, microphone completion
+and raw/rejected datagram counters. Both updated scripts and shared modules
+must be uploaded together. Working standalone audio uses immediate blocking
+I2S duplex without session headers; integrated audio uses TALKING gating,
+callbacks and call/sequence filtering. No Wi-Fi credentials were recorded.
