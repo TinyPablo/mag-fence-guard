@@ -10,6 +10,8 @@ from secrets import WIFI_SSID, WIFI_PASSWORD, STATIC_IP, PEER_IP, SOURCE
 CONTROL_PORT = 5007
 BSSIDS = {"router": "D4B709CA4536", "ap": "088AF1D9D45E"}
 RETRY_MS = 10000
+# Some MicroPython builds expose EAGAIN without its EWOULDBLOCK alias.
+WOULD_BLOCK = (errno.EAGAIN, getattr(errno, "EWOULDBLOCK", errno.EAGAIN))
 
 
 class RemoteLink:
@@ -59,7 +61,7 @@ class RemoteLink:
         try:
             data, address = self.sock.recvfrom(128)
         except OSError as error:
-            if error.args and error.args[0] in (errno.EAGAIN, errno.EWOULDBLOCK):
+            if error.args and error.args[0] in WOULD_BLOCK:
                 return None
             self.error(error)
             return None
