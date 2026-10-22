@@ -4,6 +4,7 @@
 
 from machine import Pin, SPI
 from os import uname
+from time import sleep_ms, ticks_ms, ticks_diff
 
 
 class MFRC522:
@@ -42,8 +43,19 @@ class MFRC522:
 		else:
 			raise RuntimeError("Unsupported platform")
 
+		sleep_ms(10)
 		self.rst.value(1)
-		self.init()
+		sleep_ms(50)
+		try:
+			self.init()
+		except OSError as error:
+			print("RC522 startup reset failed:", error)
+			print("RC522 retrying once after RST pin pulse")
+			self.rst.value(0)
+			sleep_ms(10)
+			self.rst.value(1)
+			sleep_ms(50)
+			self.init()
 
 	def _wreg(self, reg, val):
 
@@ -146,9 +158,10 @@ class MFRC522:
 
 		return [self._rreg(0x22), self._rreg(0x21)]
 
-	def init(self):
+	def init(self, reset=True):
 
-		self.reset()
+		if reset:
+			self.reset()
 		self._wreg(0x2A, 0x8D)
 		self._wreg(0x2B, 0x3E)
 		self._wreg(0x2D, 30)
@@ -159,6 +172,17 @@ class MFRC522:
 
 	def reset(self):
 		self._wreg(0x01, 0x0F)
+		# Configuration writes must wait until the oscillator has restarted.
+		sleep_ms(50)
+		started = ticks_ms()
+		while True:
+			command = self._rreg(0x01)
+			if not command & 0x10:
+				break
+			if ticks_diff(ticks_ms(), started) >= 100:
+				raise OSError("RC522 reset timed out: Command=0x%02X Version=0x%02X" %
+				              (command, self._rreg(0x37)))
+			sleep_ms(1)
 
 	def antenna_on(self, on=True):
 
@@ -179,26 +203,49 @@ class MFRC522:
 
 	def arm_irq(self):
 
-		# Narrow interrupt mask (RxIEn only, no TimerIEn) so the physical
-		# IRQ pin fires only when a tag actually responds. request()/
-		# anticoll() can't be reused for this: _tocard() always resets
-		# ComIEnReg to the broad 0x77 mask, which also routes the internal
-		# command timeout to the same pin - that's what made the pin fire
-		# on nearly every cycle in the earlier attempt (see docs/rfid.md,
-		# "IRQ pin: tried and dropped"). This sends REQA directly instead
-		# of going through request().
-
-		self._wreg(0x0D, 0x07)
-		self._wreg(0x02, 0x20)
-		self._cflags(0x04, 0x80)
-		self._sflags(0x0A, 0x80)
+		# Stop the previous exchange before flushing FIFO and clearing IRQs.
+		# IRqInv + RxIEn makes IRQ active-low for the falling-edge GPIO handler.
+		self._wreg(0x02, 0x80)
 		self._wreg(0x01, 0x00)
+		self._wreg(0x0D, 0x07)
+		self._wreg(0x04, 0x7F)
+		self._wreg(0x0A, 0x80)
+		self._wreg(0x02, 0xA0)
 		self._wreg(0x09, self.REQIDL)
 		self._wreg(0x01, 0x0C)
 		self._sflags(0x0D, 0x80)
 
+	def irq_received(self):
+		return bool(self._rreg(0x04) & 0x20)
+
 	def disarm_irq(self):
+		self._wreg(0x02, 0x80)
 		self._cflags(0x0D, 0x80)
+		self._wreg(0x01, 0x00)
+
+	def start_anticoll_irq(self):
+		# Start UID anticollision without waiting for SPI status in a tight loop.
+		self._wreg(0x02, 0x80)
+		self._wreg(0x01, 0x00)
+		self._wreg(0x0D, 0x00)
+		self._wreg(0x04, 0x7F)
+		self._wreg(0x0A, 0x80)
+		self._wreg(0x02, 0xA0)
+		self._wreg(0x09, 0x93)
+		self._wreg(0x09, 0x20)
+		self._wreg(0x01, 0x0C)
+		self._sflags(0x0D, 0x80)
+
+	def finish_anticoll_irq(self):
+		# Read only a complete UID response; callers enforce the time limit.
+		if not self.irq_received() or self._rreg(0x06) & 0x1B:
+			return self.ERR, []
+		if self._rreg(0x0A) != 5 or self._rreg(0x0C) & 0x07:
+			return self.ERR, []
+		uid = [self._rreg(0x09) for _ in range(5)]
+		if uid[0] ^ uid[1] ^ uid[2] ^ uid[3] != uid[4]:
+			return self.ERR, []
+		return self.OK, uid
 
 	def anticoll(self):
 
