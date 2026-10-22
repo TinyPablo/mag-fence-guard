@@ -37,3 +37,16 @@ the 6 known tags (see `docs/rfid.md`), and prints every detected UID plus
 whether it matched, so a mismatch can be diagnosed from the printed output.
 Detection is plain SPI polling - the IRQ pin was tried and dropped, see
 `docs/rfid.md`.
+
+## Combined gate controller variants
+
+- `test_gate_unlock.py`: button interrupt and RFID polling every 150 ms;
+  RC522 IRQ unconnected.
+- `test_gate_unlock_irq.py`: button and RFID interrupts; RC522 IRQ on
+  GPIO21, with REQA retried every 200 ms. Preserves the latest reported
+  working Thonny variant.
+
+Both use button GPIO14, relay GPIO15, and the RFID SPI wiring above.
+Upload `lib/mfrc522.py` alongside the chosen script. Run only one variant
+at a time; fully reset the board between comparisons. See
+`../../docs/progress.md` for hardware results and unresolved differences.

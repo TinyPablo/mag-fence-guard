@@ -150,3 +150,21 @@ stability and recovery after connection loss remain unverified.
 The first diagnostic run reported `ENOMEM` during audio streaming. Its
 cause remains unresolved; successful Wi-Fi connection alone does not
 confirm stable audio.
+
+## 2026-10-22 - IRQ gate controller preserved
+
+`firmware/gate-node/test_gate_unlock_irq.py` preserves the executable logic
+of the working script supplied from Thonny. It uses the same gate pinout
+as the polling controller, plus RC522 IRQ connected to GPIO21 with an
+internal pull-up. Both the button and RFID use falling-edge interrupts;
+RFID also retries REQA every 200 ms. The whitelist and 3-second unlock
+setting are unchanged.
+
+The IRQ variant was reported working, while the polling variant did not
+work in the latest attempt. The earlier successful polling checkpoint
+remains recorded above. The cause of this difference is not established;
+compare both variants after a full board reset before selecting one for
+network integration. Successful access does not establish that IRQ fires
+only for tag responses; earlier diagnostics observed spurious IRQ events.
+The original `test_gate_unlock.py` remains unchanged. No automatic startup
+or network commands have been added to either controller.
