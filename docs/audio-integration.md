@@ -101,3 +101,30 @@ call IDs and status lines from both boards. Zero callbacks locates a capture
 completion problem; zero datagrams with a sending peer points toward the
 transport; received datagrams with rejects indicates peer/header/sequence
 filtering. These counters narrow diagnosis, not prove the hardware cause.
+
+## Release 0.4.0 - automatic AP selection and startup versions
+
+Set `SOURCE = "auto"` in each board's existing secrets.py. The integrated
+link scans once during startup, filters to the configured SSID and the two
+known BSSIDs, sorts by descending RSSI and tries the strongest first. If only
+one is visible it is the only candidate. Failed connection attempts rotate
+through the startup candidates every 10 seconds. If scanning fails or finds
+neither known point, retries use both configured BSSIDs without RSSI ranking.
+No further blocking scan is performed in the control loop and no proactive
+roaming occurs while connected. Newly visible points are discovered by a
+fresh startup scan. Static local/peer addresses remain unchanged. Manual
+SOURCE router/ap modes remain available. The standalone duplex test still
+requires manual SOURCE; auto is implemented in the integrated link only.
+
+Upload all release files together: both boards need `/lib/firmware_info.py`,
+`/lib/remote_link.py`, `/lib/intercom_session.py`, `/lib/intercom_audio.py`,
+and `/chime.py`. Gate additionally needs `/lib/mfrc522.py`,
+`/lib/rfid_debug.py` and `/lib/rfid_recovery.py`. Each needs its updated
+role-specific main test script and its own existing secrets.py.
+
+Startup prints role, script/shared version 0.4.0 and each loaded module's
+version. Mixed/unknown module versions stop initialization with an explicit
+error instead of silently mixing files. Restart after uploads to discard
+cached imports. Wi-Fi logs show candidate RSSI and the enforced selected
+BSSID. Firmware version markers identify this release's files; they do not
+hash arbitrary subsequent manual edits.

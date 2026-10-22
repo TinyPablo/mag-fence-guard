@@ -409,3 +409,15 @@ and raw/rejected datagram counters. Both updated scripts and shared modules
 must be uploaded together. Working standalone audio uses immediate blocking
 I2S duplex without session headers; integrated audio uses TALKING gating,
 callbacks and call/sequence filtering. No Wi-Fi credentials were recorded.
+
+## 0.4.0 - working voice reported; automatic AP selection prepared
+
+The user reported integrated voice working after the diagnostic update.
+Long-duration stability and RFID configuration-loss cause remain unresolved.
+Added SOURCE auto startup scan/ranking of the known router and repeater by
+RSSI, single-visible-point selection and fallback connection attempts.
+Connected sessions do not roam. Added script/shared/module version markers
+and startup compatibility checks for 0.4.0. All release files must be
+uploaded together. Twelve host tests pass, including strongest/single AP
+selection, filtering, existing voice and chime checks. Auto-selection and
+startup version validation on physical boards remain to be verified.
