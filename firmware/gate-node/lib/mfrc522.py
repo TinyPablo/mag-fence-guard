@@ -306,4 +306,4 @@ class MFRC522:
 		return stat
 
 
-MODULE_VERSION = "0.4.0"
+MODULE_VERSION = "0.5.0"

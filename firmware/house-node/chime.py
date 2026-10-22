@@ -19,6 +19,13 @@ class Chime:
                 self.sound.extend(struct.pack("<h", sample))
             self.sound.extend(bytes(RATE * 80 // 1000 * 2))
         self.sound = memoryview(self.sound)
+        self.buzz_sound = bytearray()
+        for i in range(RATE // 4):
+            value = (2000 if (i * 220 // RATE) % 2 else -2000) if i < RATE * 120 // 1000 else 0
+            self.buzz_sound.extend(struct.pack("<h", value))
+        self.buzz_sound = memoryview(self.buzz_sound)
+        self.buzzing = False
+        self.buzz_until = 0
         self.position = len(self.sound)
         self.speaker = None
         self.repeating = False
@@ -34,6 +41,8 @@ class Chime:
                            rate=RATE, ibuf=1024)
 
     def ring(self, repeat=False):
+        if self.buzzing:
+            return
         self.resume()
         self.position = 0
         self.repeating = repeat
@@ -41,6 +50,7 @@ class Chime:
         self.next_ring = None
 
     def stop(self):
+        self.buzzing = False
         self.position = len(self.sound)
         self.repeating = False
         self.next_ring = None
@@ -49,8 +59,26 @@ class Chime:
             self.speaker.deinit()
             self.speaker = None
 
+    def buzz(self, duration_ms):
+        self.stop()
+        self.resume()
+        self.buzzing = True
+        self.buzz_until = ticks_add(ticks_ms(), duration_ms)
+        self.position = 0
+
     def poll(self):
         now = ticks_ms()
+        if self.buzzing:
+            if ticks_diff(now, self.buzz_until) >= 0:
+                self.stop()
+                return
+            if self.position >= len(self.buzz_sound):
+                self.position = 0
+            end = min(self.position + 256, len(self.buzz_sound))
+            written = self.speaker.write(self.buzz_sound[self.position:end])
+            if written:
+                self.position += written
+            return
         if self.repeating and ticks_diff(now, self.started) >= 30000:
             self.stop()
             return
@@ -76,4 +104,4 @@ class Chime:
         self.release()
 
 
-MODULE_VERSION = "0.4.0"
+MODULE_VERSION = "0.5.0"

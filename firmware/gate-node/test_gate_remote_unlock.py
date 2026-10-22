@@ -10,7 +10,7 @@
 
 from lib.firmware_info import report
 
-SCRIPT_VERSION = "0.4.0"
+SCRIPT_VERSION = "0.5.0"
 print("FIRMWARE starting: role=gate version=" + SCRIPT_VERSION)
 
 import micropython
@@ -19,6 +19,8 @@ from time import ticks_ms, ticks_diff, sleep_ms
 from lib.mfrc522 import MFRC522
 from lib import rfid_debug
 from lib.rfid_recovery import Recovery
+from lib.tag_presence import TagPresence
+from lib.unlock_notice import UnlockNotice
 from lib.remote_link import RemoteLink
 from lib.intercom_session import Session
 from lib.intercom_audio import Voice
@@ -117,6 +119,8 @@ chime = Chime()
 session = Session(link, chime, "gate")
 voice = Voice(chime, "gate")
 session.voice = voice
+notice = UnlockNotice(link, "gate")
+presence = TagPresence()
 recovery = Recovery(reader)
 reader.arm_irq()
 rfid_cycle_started = ticks_ms()
@@ -127,8 +131,24 @@ def handle_call():
     global call_pressed
     if call_pressed:
         call_pressed = False
-        session.call()
+        if not unlocked:
+            session.call()
+        else:
+            print("Gate unlocked; call press ignored")
     session.poll()
+
+
+def unlock(source):
+    global unlock_until, unlocked
+    # End voice first so the buzzer has exclusive ownership of the speaker.
+    session.finish()
+    now = ticks_ms()
+    unlock_until = ticks_add(now, UNLOCK_MS)
+    set_relay(True)
+    unlocked = True
+    chime.buzz(UNLOCK_MS)
+    notice.notify(source)
+    print("UNLOCKED source:", source, "at", now)
 
 
 def handle_remote():
@@ -139,6 +159,7 @@ def handle_remote():
         packet = link.receive()
         if packet is None:
             break
+        notice.receive(packet)
         session.receive(packet)
         if not packet.startswith(b"OPEN "):
             continue
@@ -153,11 +174,9 @@ def handle_remote():
             continue
         if len(recent_requests) >= 32:
             continue
-        unlock_until = ticks_add(now, UNLOCK_MS)
-        set_relay(True)
-        unlocked = True
+        unlock("house")
         recent_requests.append((request_id, now))
-        print("UNLOCKED remote:", request_id.decode())
+        print("Remote unlock request:", request_id.decode())
         link.send(b"ACK " + request_id)
 
 
@@ -167,6 +186,7 @@ try:
     while True:
         handle_remote()
         handle_call()
+        notice.poll()
         chime.poll()
         now = ticks_ms()
 
@@ -175,6 +195,7 @@ try:
         service_started = ticks_ms()
         if recovery.poll():
             rfid_stage = "recovery"
+            presence.pause()
             tag_ready = False
         else:
             if rfid_stage == "recovery":
@@ -200,10 +221,13 @@ try:
                             rfid_read_count += 1
                             uid = "-".join("{:02X}".format(b) for b in raw_uid[:4])
                             known = uid in WHITELIST
-                            print("Tag UID:", uid, "known:", known)
-                            if known:
-                                unlock_until = ticks_add(ticks_ms(), UNLOCK_MS)
+                            if presence.seen(uid):
+                                print("Tag UID:", uid, "known:", known)
+                                if known:
+                                    unlock("rfid:" + uid)
                 elif ticks_diff(now, rfid_stage_started) >= RFID_RESPONSE_MS:
+                    if rfid_stage == "request":
+                        presence.missing(now)
                     reader.disarm_irq()
                     rfid_stage = "wait"
             if rfid_stage == "wait" and ticks_diff(now, rfid_cycle_started) >= RFID_RETRY_MS:

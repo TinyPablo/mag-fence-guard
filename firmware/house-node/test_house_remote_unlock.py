@@ -3,7 +3,7 @@
 
 from lib.firmware_info import report
 
-SCRIPT_VERSION = "0.4.0"
+SCRIPT_VERSION = "0.5.0"
 print("FIRMWARE starting: role=house version=" + SCRIPT_VERSION)
 
 import os
@@ -13,6 +13,7 @@ from lib.remote_link import RemoteLink
 from chime import Chime
 from lib.intercom_session import Session
 from lib.intercom_audio import Voice
+from lib.unlock_notice import UnlockNotice
 
 report("house", SCRIPT_VERSION)
 
@@ -22,6 +23,7 @@ link = RemoteLink()
 session = Session(link, chime, "house")
 voice = Voice(chime, "house")
 session.voice = voice
+notice = UnlockNotice(link, "house")
 talk_button = Pin(18, Pin.IN, Pin.PULL_UP)
 talk_raw = talk_button.value()
 talk_stable = talk_raw
@@ -72,7 +74,11 @@ try:
             packet = link.receive()
             if packet is None:
                 break
-            session.receive(packet)
+            if notice.receive(packet) is not None:
+                session.end()
+                chime.buzz(500)
+            else:
+                session.receive(packet)
             if pending is not None and packet == b"ACK " + pending:
                 print("Gate confirmed unlock:", pending.decode())
                 pending = None
@@ -86,6 +92,7 @@ try:
                 attempts += 1
                 last_send = now
         session.poll()
+        notice.poll()
         voice.service(session)
         sleep_ms(2)
 finally:

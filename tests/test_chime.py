@@ -55,6 +55,20 @@ class ChimeTests(unittest.TestCase):
         self.assertTrue(speaker.closed)
         self.assertFalse(self.chime.repeating)
 
+    def test_unlock_buzzer_has_priority_and_stops_at_deadline(self):
+        self.chime.ring(repeat=True)
+        self.chime.buzz(500)
+        speaker = self.chime.speaker
+        self.chime.ring(repeat=True)
+        self.assertTrue(self.chime.buzzing)
+        self.assertFalse(self.chime.repeating)
+        self.chime.poll()
+        self.assertGreater(speaker.written, 0)
+        self.now = 500
+        self.chime.poll()
+        self.assertFalse(self.chime.buzzing)
+        self.assertTrue(speaker.closed)
+
     def test_stop_flushes_and_next_ring_reopens_speaker(self):
         self.chime.ring(repeat=True)
         self.chime.poll()
