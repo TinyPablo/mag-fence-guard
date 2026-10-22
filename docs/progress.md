@@ -168,3 +168,14 @@ network integration. Successful access does not establish that IRQ fires
 only for tag responses; earlier diagnostics observed spurious IRQ events.
 The original `test_gate_unlock.py` remains unchanged. No automatic startup
 or network commands have been added to either controller.
+
+## Remote unlock implementation - hardware test pending
+
+Added `test_gate_remote_unlock.py` based on the preserved IRQ gate
+controller, `test_house_remote_unlock.py`, and shared `lib/remote_link.py`.
+Control uses UDP 5007, explicit BSSID selection, acknowledgement/retry,
+and a bounded duplicate-request cache. Gate Wi-Fi retries do not wait in
+the local RFID/button loop. Audio and automatic startup remain separate.
+See `remote-unlock.md` for uploads, wiring, behavior, and the test checklist.
+Hardware confirmation is pending; the existing gate and audio checkpoint
+scripts remain unchanged.
