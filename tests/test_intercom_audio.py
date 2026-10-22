@@ -139,6 +139,26 @@ class AudioTests(unittest.TestCase):
         self.assertEqual(self.voice.send_errors, 1)
         self.assertEqual(self.session.state, 'TALKING')
 
+    def test_send_preserves_pcm_conversion_and_session_header(self):
+        self.session.state = 'TALKING'
+        self.voice.service(self.session)
+        self.voice.samples[0] = 65536
+        self.voice.samples[1] = -65536
+        self.voice.mic_done(self.voice.mic)
+        self.voice.service(self.session)
+        packet = self.socket.sent[0]
+        self.assertEqual(len(packet), 538)
+        self.assertEqual(packet[:24], self.session.call_id)
+        self.assertEqual(struct.unpack_from('<hh', packet, 26), (1, -1))
+        self.assertEqual(self.voice.mic_callbacks, 1)
+
+    def test_idle_also_reports_audio_state(self):
+        self.voice.stats_at = -5000
+        with patch('builtins.print') as output:
+            self.voice.service(self.session)
+        self.assertTrue(any('VOICE status:' in str(c) for c in output.call_args_list))
+        self.assertIsNone(self.voice.mic)
+
     def test_init_failure_restores_chime_and_ends_call(self):
         self.session.state = 'TALKING'
         with patch.object(self.module, 'I2S', side_effect=OSError(12)):

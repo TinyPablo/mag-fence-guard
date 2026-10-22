@@ -108,7 +108,7 @@ recent_requests = []
 link = RemoteLink()
 chime = Chime()
 session = Session(link, chime, "gate")
-voice = Voice(chime)
+voice = Voice(chime, "gate")
 session.voice = voice
 recovery = Recovery(reader)
 reader.arm_irq()
