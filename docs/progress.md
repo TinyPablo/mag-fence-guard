@@ -421,3 +421,26 @@ and startup compatibility checks for 0.4.0. All release files must be
 uploaded together. Twelve host tests pass, including strongest/single AP
 selection, filtering, existing voice and chime checks. Auto-selection and
 startup version validation on physical boards remain to be verified.
+
+## 0.5.0 - unlock feedback and tag presentation latch prepared
+
+Added a single gate unlock path: ends the call/voice, activates the relay,
+starts a three-second local buzz and sends a short-lived notification.
+House plays an approximately 500 ms double buzz for both remote-button and
+RFID unlocks. Presentation latch avoids extending the unlock interval while
+a tag remains present; reader recovery does not itself clear this latch.
+Fresh rotating house tokens, bounded retries and event deduplication avoid
+queued offline notifications. Current RFID configuration-loss workaround
+and limitations remain in effect. Hardware verification is pending.
+
+Fixed the uploader's generated SOURCE assignment SyntaxError, added local
+compilation checks and tests for device snippets, preserved credentials and
+role manifests. The uploader remains host-only and does not write boot.py
+or main.py. Upload/run instructions are in `firmware-upload.md`. Full
+module version markers were bumped to 0.5.0 for consistent uploads.
+
+Verification for 0.5.0: 24 host-side tests passed, including presentation
+latching, unlock ordering, buzzer priority/deadline, fresh event delivery,
+duplicate/expired/offline events, generated uploader code and credential
+preservation. Syntax and whitespace checks passed. Device upload and
+physical sound/access behavior remain pending hardware verification.

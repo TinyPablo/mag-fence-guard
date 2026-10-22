@@ -128,3 +128,32 @@ error instead of silently mixing files. Restart after uploads to discard
 cached imports. Wi-Fi logs show candidate RSSI and the enforced selected
 BSSID. Firmware version markers identify this release's files; they do not
 hash arbitrary subsequent manual edits.
+
+## Release 0.5.0 - unlock sounds and one action per tag
+
+All module/script versions are now 0.5.0; upload the full release together.
+New files: `/lib/unlock_notice.py` on both boards and `/lib/tag_presence.py`
+on the gate. The uploader manifest includes them; see `firmware-upload.md`.
+
+Every accepted unlock ends the gate call/voice before activating the relay
+and starting a low pulsed buzz for the 3-second unlock interval. The house
+plays two short buzz pulses over approximately 500 ms when it receives the
+fresh unlock event, including openings triggered by RFID. Held tags do not
+extend unlocking or repeat notices. The same tag rearms after at least four
+missing request responses spanning 800 ms (roughly a second); changing to
+a different UID is a new presentation. UID read failures alone do not prove
+absence, and reader recovery preserves the presentation latch.
+
+House availability tokens rotate every 300 ms and expire after 1 second.
+Gate notifications require a recent token and retry only for 800 ms; house
+deduplicates event IDs and rejects expired tokens. No offline event queue
+is retained. As with any UDP exchange, short packet transit/detection delays
+remain possible. Local RFID access works without house connectivity; a
+missed house notification is not replayed when connectivity returns.
+
+Test a held tag for longer than 3 seconds, remove/re-present it, then open
+from the house during ringing and TALKING. Confirm gate buzzing stops with
+the relay's unlock interval and each new unlock produces one short house
+notification. Stop the house, unlock by tag, restart the house: no past buzz
+should play. RFID configuration recovery is still a workaround, not a fix
+for its underlying fault. All sound/notice behavior needs hardware checks.
