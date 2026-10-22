@@ -119,4 +119,4 @@ class RemoteLink:
         self.sock.close()
 
 
-MODULE_VERSION = "0.5.0"
+MODULE_VERSION = "0.6.0"

@@ -45,6 +45,13 @@ class NoticeTests(unittest.TestCase):
         self.gate.receive(self.hl.sent[-1])
         self.assertIsNone(self.gate.pending)
 
+    def test_pir_source_is_delivered(self):
+        self.house.poll()
+        self.gate.receive(self.hl.sent[-1])
+        self.gate.notify('pir')
+        self.gate.poll()
+        self.assertEqual(self.house.receive(self.gl.sent[-1]), b'pir')
+
     def test_expired_event_does_not_ring(self):
         event = self.event()
         self.now += 1000

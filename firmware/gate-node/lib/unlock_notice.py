@@ -45,7 +45,7 @@ class UnlockNotice:
             return None
         if not any(token == parts[1] and ticks_diff(now, at) < 1000 for token, at in self.tokens):
             return None
-        if parts[3] != b"house" and not parts[3].startswith(b"rfid:"):
+        if parts[3] not in (b"house", b"pir") and not parts[3].startswith(b"rfid:"):
             return None
         self.link.send(b"EVENT_ACK " + parts[2])
         if parts[2] in self.seen:
@@ -77,4 +77,4 @@ class UnlockNotice:
                 self.last_send = now
 
 
-MODULE_VERSION = "0.5.0"
+MODULE_VERSION = "0.6.0"

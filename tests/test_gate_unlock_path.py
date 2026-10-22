@@ -17,10 +17,14 @@ class UnlockPathTests(unittest.TestCase):
             'chime': types.SimpleNamespace(buzz=lambda ms: events.append(('buzz', ms))),
             'notice': types.SimpleNamespace(notify=lambda source: events.append(('notice', source))),
             'ticks_ms': lambda: 1000, 'ticks_add': lambda a, b: a + b,
-            'UNLOCK_MS': 3000, 'set_relay': lambda v: events.append(('relay', v)),
+            'UNLOCK_MS': 3000, 'unlock_until': 0, 'ticks_diff': lambda a, b: a-b, 'set_relay': lambda v: events.append(('relay', v)),
         }
         exec(compile(ast.Module(body=[function], type_ignores=[]), '<unlock>', 'exec'), env)
         env['unlock']('rfid:ABC')
         self.assertEqual(events, ['end', ('relay', True), ('buzz', 3000), ('notice', 'rfid:ABC')])
         self.assertEqual(env['unlock_until'], 4000)
         self.assertTrue(env['unlocked'])
+        env['unlock']('pir', 15000)
+        self.assertEqual(env['unlock_until'], 16000)
+        env['unlock']('house')
+        self.assertEqual(env['unlock_until'], 16000)

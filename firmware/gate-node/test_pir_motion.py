@@ -1,20 +1,28 @@
-# Prints a line every time the HC-SR501 PIR OUT pin changes state, with a
-# millisecond timestamp so trigger/hold timing can be read off the REPL
-# (useful for tuning the sensitivity/distance and time-delay potentiometers).
-
 from machine import Pin
-from time import sleep_ms, ticks_ms
+from time import sleep, ticks_ms, ticks_diff
 
 pir = Pin(13, Pin.IN)
+previous = pir.value()
+high_since = ticks_ms() if previous else None
 
-print("Watching PIR on GPIO13. Move in front of the sensor.")
-
-last_state = pir.value()
-print("Initial state:", "MOTION" if last_state else "idle", "at", ticks_ms())
-
-while True:
+# 10 minutes * 60 seconds / 0.2 seconds = 3000 iterations
+for i in range(3000):
     state = pir.value()
-    if state != last_state:
-        print("MOTION" if state else "idle", "at", ticks_ms())
-        last_state = state
-    sleep_ms(20)
+
+    if state == 1 and previous == 0:
+        high_since = ticks_ms()
+
+    if state == 0 and previous == 1:
+        duration = ticks_diff(ticks_ms(), high_since) / 1000
+        print("KONIEC - sygnał HIGH trwał %.1f s" % duration)
+        high_since = None
+
+    # Calculate time in seconds
+    seconds = i * 0.2
+    m, s = divmod(seconds, 60)
+    
+    prefix = "WAIT" if seconds < 60 else ""
+    print("%dm %02ds %s OUT=%d" % (m, s, prefix, state))
+
+    previous = state
+    sleep(0.2)

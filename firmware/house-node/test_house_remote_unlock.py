@@ -3,7 +3,7 @@
 
 from lib.firmware_info import report
 
-SCRIPT_VERSION = "0.5.0"
+SCRIPT_VERSION = "0.6.0"
 print("FIRMWARE starting: role=house version=" + SCRIPT_VERSION)
 
 import os

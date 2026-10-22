@@ -6,20 +6,23 @@
 # Wiring:
 #   Button: GPIO14 (pull-up, other leg to GND)
 #   Relay: GPIO15 -> relay IN; magnet through COM/NC, flyback diode across magnet
+#   PIR: OUT=GPIO13, VCC=5V, GND=GND, jumper H
 #   RFID: SCK=12, MOSI=11, MISO=10, CS=17, RST=16, IRQ=21
 
 from lib.firmware_info import report
 
-SCRIPT_VERSION = "0.5.0"
+SCRIPT_VERSION = "0.6.0"
 print("FIRMWARE starting: role=gate version=" + SCRIPT_VERSION)
 
 import micropython
+import secrets as config
 from machine import Pin
 from time import ticks_ms, ticks_diff, sleep_ms
 from lib.mfrc522 import MFRC522
 from lib import rfid_debug
 from lib.rfid_recovery import Recovery
 from lib.tag_presence import TagPresence
+from lib.pir_exit import PirExit
 from lib.unlock_notice import UnlockNotice
 from lib.remote_link import RemoteLink
 from lib.intercom_session import Session
@@ -36,6 +39,7 @@ RELAY_PIN = 15
 RFID_IRQ_PIN = 21
 DEBOUNCE_MS = 50
 UNLOCK_MS = 3000
+PIR_UNLOCK_MS = 15000
 RFID_RETRY_MS = 200
 RFID_DIAGNOSTIC_MS = 5000
 RFID_RESPONSE_MS = 40
@@ -50,6 +54,8 @@ WHITELIST = {
     "DC-FA-14-4A",
 }
 
+pir = Pin(13, Pin.IN)
+pir_exit = PirExit(getattr(config, "PIR_WARMUP_MS", 60000))
 button = Pin(BUTTON_PIN, Pin.IN, Pin.PULL_UP)
 relay = Pin(RELAY_PIN, Pin.OUT)
 rfid_irq = Pin(RFID_IRQ_PIN, Pin.IN, Pin.PULL_UP)
@@ -138,15 +144,17 @@ def handle_call():
     session.poll()
 
 
-def unlock(source):
+def unlock(source, duration_ms=UNLOCK_MS):
     global unlock_until, unlocked
     # End voice first so the buzzer has exclusive ownership of the speaker.
     session.finish()
     now = ticks_ms()
-    unlock_until = ticks_add(now, UNLOCK_MS)
+    # A new non-PIR command must not shorten an existing exit interval.
+    duration_ms = max(duration_ms, ticks_diff(unlock_until, now))
+    unlock_until = ticks_add(now, duration_ms)
     set_relay(True)
     unlocked = True
-    chime.buzz(UNLOCK_MS)
+    chime.buzz(duration_ms)
     notice.notify(source)
     print("UNLOCKED source:", source, "at", now)
 
@@ -251,6 +259,10 @@ try:
             unlocked = should_unlock
             set_relay(unlocked)
             print("UNLOCKED" if unlocked else "LOCKED", "at", now)
+
+        # Process PIR after relocking so it requires LOW after the interval.
+        if pir_exit.update(pir.value(), unlocked):
+            unlock("pir", PIR_UNLOCK_MS)
 
         voice.service(session)
         sleep_ms(2)
