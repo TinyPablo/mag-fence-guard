@@ -389,3 +389,11 @@ peer/sequence filtering, send failure handling, and initialization cleanup.
 Hardware timing, acoustic feedback, repeated-call stability and coexistence
 with RFID recovery remain to be verified. Standalone audio checkpoint is
 unchanged. No PR or deployment is part of this stage.
+
+### Repeated ding-dong during incoming calls - hardware test pending
+
+Both nodes now repeat a high-then-low 880/660 Hz chime while RINGING,
+with a pause between pairs and a 30-second local limit. Answer/open/end
+stops and releases the speaker, discarding queued chime samples before
+voice takes ownership. Six host-side tests pass, including repetition,
+timeout, immediate stop/reopen and existing voice lifecycle/transport checks.

@@ -69,3 +69,13 @@ is not fixed by this integration. Repeated hardware stability is unverified.
 
 Host-side checks: `python3 -m unittest discover -s tests -v`.
 These mock transport/I2S; they do not verify timing or sound on ESP32.
+
+## Repeated incoming-call chime
+
+During RINGING both boards repeat a descending 880 Hz / 660 Hz ding-dong,
+with approximately 900 ms between completed chimes. Answer, house opening,
+call timeout or peer loss stops playback and discards queued chime samples.
+The house session expires after 30 seconds; each chime also independently
+limits repetition to 30 seconds. Upload updated `/chime.py` and
+`/lib/intercom_session.py` on both boards. Gate stop follows receipt of the
+house state update (normally within the 500 ms heartbeat interval).
