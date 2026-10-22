@@ -86,4 +86,4 @@ class Recovery:
         return True
 
 
-MODULE_VERSION = "0.6.0"
+MODULE_VERSION = "0.6.1"

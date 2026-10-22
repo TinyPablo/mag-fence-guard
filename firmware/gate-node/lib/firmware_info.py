@@ -2,11 +2,11 @@
 
 import sys
 
-VERSION = "0.6.0"
+VERSION = "0.6.1"
 
 
 def report(role, script_version):
-    names = ["lib.remote_link", "lib.intercom_session", "lib.intercom_audio", "lib.unlock_notice", "chime"]
+    names = ["lib.service_mode", "lib.remote_link", "lib.intercom_session", "lib.intercom_audio", "lib.unlock_notice", "chime"]
     if role == "gate":
         names += ["lib.mfrc522", "lib.rfid_debug", "lib.rfid_recovery", "lib.tag_presence", "lib.pir_exit"]
     print("FIRMWARE: Mag Fence Guard | role=%s | script=%s | shared=%s" %

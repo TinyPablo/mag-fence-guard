@@ -77,4 +77,4 @@ class UnlockNotice:
                 self.last_send = now
 
 
-MODULE_VERSION = "0.6.0"
+MODULE_VERSION = "0.6.1"

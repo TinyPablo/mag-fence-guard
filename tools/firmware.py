@@ -12,7 +12,7 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 LIB = ROOT / 'firmware/gate-node/lib'
 ROLE_IP = {'gate': '192.168.1.237', 'house': '192.168.1.238'}
-SHARED = ('firmware_info.py', 'remote_link.py', 'intercom_session.py', 'intercom_audio.py', 'unlock_notice.py')
+SHARED = ('firmware_info.py', 'service_mode.py', 'remote_link.py', 'intercom_session.py', 'intercom_audio.py', 'unlock_notice.py')
 GATE = ('mfrc522.py', 'rfid_debug.py', 'rfid_recovery.py', 'tag_presence.py', 'pir_exit.py')
 
 
@@ -106,7 +106,7 @@ def verify_code(files, role):
         " if binascii.hexlify(h.digest()).decode() != checksum:\n"
         "  raise RuntimeError('Upload checksum mismatch: ' + name)\n"
         " print('Verified:', name)\n"
-        "import lib.remote_link, lib.intercom_session, lib.intercom_audio, lib.unlock_notice, chime\n"
+        "import lib.service_mode, lib.remote_link, lib.intercom_session, lib.intercom_audio, lib.unlock_notice, chime\n"
         + ("import lib.mfrc522, lib.rfid_debug, lib.rfid_recovery, lib.tag_presence, lib.pir_exit\n" if role == 'gate' else '')
         + "from lib.firmware_info import VERSION, report\n"
         + f"report({role!r}, VERSION)\n"
