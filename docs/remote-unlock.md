@@ -89,3 +89,48 @@ Verify a gate press rings the house without releasing the magnet, a house
 press opens the gate during/after ringing, RFID still opens, and a held gate
 button does not continuously ring. Then test a disconnected house: gate
 presses must not release the lock and RFID must remain operational.
+
+## Call-state control test (current version)
+
+Upload updated `test_gate_remote_unlock.py` to the gate and
+`test_house_remote_unlock.py` to the house. Upload the same
+`firmware/gate-node/lib/intercom_session.py` to `/lib/intercom_session.py`
+on BOTH boards. Upload updated `firmware/house-node/chime.py` to `/chime.py`
+on BOTH boards. Keep `/lib/remote_link.py`, gate `/lib/mfrc522.py`, and each
+board's existing `/secrets.py`. Restart both boards before running.
+
+House: open button GPIO14 to GND; talk button GPIO18 to GND. The gate now
+needs its speaker/amplifier connected with the same I2S pinout as the house
+(BCLK7/LRC8/DIN9). Microphones remain unused on both boards. No LED is
+required for this test; inspect `CALL STATE` logs in both Thonny consoles.
+
+1. Gate press: both speakers chime; both logs reach RINGING. Magnet holds.
+2. House GPIO18 press: both logs reach TALKING. There is no voice audio yet.
+3. House GPIO18 again: both logs reach IDLE. Another press in IDLE is ignored.
+4. Make a new call and press house GPIO14 without answering: gate opens for
+   3 seconds and both sessions end. Repeat while TALKING.
+5. Leave a call unanswered: it ends after 30 seconds. Hold or repeat the
+   gate button during an active call: it must not restart ringing.
+6. Confirm RFID still unlocks. Stop one script during a call: the other
+   returns to IDLE after about 3 seconds. Restart and initiate a new call.
+
+The house open button is still usable in IDLE. Session heartbeats and
+revision ordering replace the preceding RING_ACK-only exchange. A call
+acceptance triggers each chime once; new microphone audio and audible
+answer/end signals are not implemented in this stage.
+
+## RFID polling wiring update
+
+The latest integrated gate script no longer uses reader IRQ. Disconnect
+RC522 IRQ from GPIO21 with power off. SPI SCK12/MOSI11/MISO10/CS17/RST16,
+3V3/GND and the other components stay unchanged. Upload the updated driver
+and gate script together. Earlier IRQ wiring instructions above refer to
+previous checkpoints. Startup now explicitly reports `RFID polling (no IRQ)`.
+Keep the recovery/debug/session modules on the board.
+
+## Current wiring: IRQ restored after unsuccessful polling trial
+
+The preceding polling update was reverted. Reconnect RC522 IRQ to GPIO21
+with power removed and upload the restored driver and gate script together.
+Keep the existing recovery, debug, session and chime modules. House wiring
+and code remain unchanged. Current startup reports `RFID IRQ GPIO21`.

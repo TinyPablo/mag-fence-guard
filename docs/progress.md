@@ -3,6 +3,47 @@
 Record hardware results here after each test. Distinguish observed behavior
 from behavior expected from the code. Do not record Wi-Fi passwords.
 
+## Current checkpoint - call controls with recoverable IRQ RFID
+
+This section supersedes earlier pending-test notes below. The dated entries
+retain the sequence of experiments.
+
+- Gate uses `test_gate_remote_unlock.py`, with RC522 IRQ on GPIO21.
+- House uses `test_house_remote_unlock.py`; GPIO14 opens the gate and
+  GPIO18 answers/ends a call. Gate GPIO14 calls the house without unlocking.
+- Both speakers chime after call acceptance. RINGING/TALKING/IDLE control
+  transitions and remote opening were exercised on hardware. TALKING still
+  sends no microphone audio.
+- RFID opens locally. RC522 intermittently loses configuration; automatic
+  restoration is an active workaround, not a resolved fault.
+- The capacitor test did not eliminate the fault. The last reported run
+  showed 8 reset attempts, 8 restorations and 0 recovery failures. The
+  installed capacitor value was not explicitly confirmed in that report.
+- Both nodes in that run selected the repeater (`SOURCE = "ap"`). Previous
+  router-to-repeater tests also worked.
+- Keep USB power and manual Thonny startup. No deployment or automatic
+  application startup is part of this checkpoint.
+
+Open problems and limits:
+
+- During recovery RFID exchanges pause; the 15-second retry cooldown can
+  leave access by tag unavailable for several seconds. Remote call/open
+  controls continue being serviced.
+- Lost RC522 settings, startup timeouts and the all-zero SPI read incident
+  are recorded below; the underlying electrical/software cause is unknown.
+- A held tag can repeatedly extend the unlock interval.
+- Nonblocking RFID removed the previously reported chime interruption in
+  one test, but uninterrupted playback during recovery is not guaranteed.
+- One log ended a call with `House unreachable`; whether the house board
+  was deliberately stopped is unconfirmed.
+- Earlier UDP duplex audio hit `ENOMEM`; its cause and long-term audio
+  stability remain unresolved.
+
+Next stage: enable two-way microphone audio only while TALKING, sharing
+speaker ownership with the chime. Answer starts audio; hangup, opening,
+timeout or peer loss must stop it. Keep this checkpoint on the current
+branch before implementing audio. PR creation is deferred until requested.
+
 ## 2026-10-22 - local gate unlocking confirmed
 
 Board: ESP32-S3 N16R8, running MicroPython through Thonny.
@@ -199,3 +240,128 @@ unused. Upload `chime.py` alongside the house script. Calls use retries,
 acknowledgements, a 10-second duplicate cache, and a one-second gate-side
 cooldown. Offline calls are not queued. This change does not alter the
 preserved standalone gate test scripts.
+
+## 2026-10-22 - gate-to-house chime confirmed
+
+The gate button successfully rang the house speaker using the remote
+scripts. This is the hardware checkpoint before adding call states.
+
+## Call controls - hardware verification pending
+
+Added shared `lib/intercom_session.py`: gate calls ring both speakers once
+the house accepts the request. The house owns call state and sends it every
+500 ms with a session ID and increasing revision. Gate button presses are
+ignored while a call is active. Repeated/stale packets do not replay the
+chime or revert a newer state. The house talk button is GPIO18 to GND:
+RINGING -> TALKING -> IDLE. The house open button remains GPIO14 and ends
+an active call when sending an unlock request. RFID still opens locally.
+
+This is a control-only test: TALKING does not transmit microphone audio.
+Unanswered calls expire after 30 seconds, TALKING after 120 seconds; missing
+peer heartbeats end the call after approximately 3 seconds. No call is
+restored automatically after a restart. Duplicate history is bounded and
+volatile. Host-side session checks cover retries, answer/hangup, stale state
+and loss of peer contact; physical verification remains pending.
+
+## RFID regression during call-control test - fix pending hardware verification
+
+RFID was reported to unlock once and then stop working reliably. Corrected
+IRQ polarity and rearm ordering in the shared MFRC522 driver and added a
+missed-response check plus five-second IRQ/read counters to the remote gate
+script. Host-side checks cover register-write ordering and RxIRq handling;
+repeat hardware scans are still required. See `rfid.md` for details.
+
+### RFID/chime follow-up
+
+Updated-driver test still stalled at 55 successful reads while calls and
+remote unlock continued. Gate chime interruptions were reported. Replaced
+blocking UID reads in the remote gate loop with a two-stage asynchronous
+exchange, gated by RxIRq with 40 ms response deadlines and 200 ms scan
+cycles. Added RFID stage/max service duration diagnostics. Simulated checks
+cover false IRQ, successful UID response, timeout and subsequent scan;
+repeat hardware testing remains pending. The complete hardware failure
+cause is not yet established.
+
+### Manual RC522 recovery tools - hardware test pending
+
+Added `lib/rfid_debug.py` and console wrappers `rfid_status()`,
+`rfid_probe(10)`, `rfid_reset()`, and `rfid_reset(hardware=True)`.
+These compare reads after interruption, software reset, and an RC522-only
+RST pulse without cycling ESP32 power. Probes never operate the relay.
+Driver reset now waits for oscillator startup with a bounded readiness
+check. Host-side checks cover snapshot/reset separation, both reset modes,
+probe bounds and reset timeout. Results on the failing hardware are pending.
+
+### 2026-10-22 - reader configuration loss and software recovery confirmed
+
+After reads stopped at 8, the manual snapshot showed Version=0x82,
+TxControl=0x80 (antenna driver enable bits clear), TMode=0x00,
+TPrescaler=0x00 and TReload=0x0000. SPI register reads still worked.
+A ten-second probe before reset found zero UIDs. Manual software reset and
+initialization restored TxControl=0x83, TMode=0x8D, TPrescaler=0x3E,
+TReload=0x001E; the following ten-second probe read the tag ten times.
+This confirms loss of operating configuration and recovery by software
+reinitialization, not the underlying cause. Possible supply disturbance,
+reset-line disturbance or unintended register writes remain unverified.
+The failure followed gate chime activity in this run. Next isolate gate
+amplifier load with a powered-down wiring change and repeat the same test,
+retaining the software and checking register snapshots after any failure.
+No automatic reset/recovery has been added.
+
+### RC522 configuration-loss recovery
+
+Manual hardware test: failing state had antenna bits disabled and timer
+registers zeroed; baseline probe read zero tags. Software reset restored
+the expected settings and the subsequent probe read the tag 10 times.
+Added `lib/rfid_recovery.py` to detect lost stable configuration once per
+second and restore it with a staged software reset, post-reset verification,
+and a 15-second minimum between attempts. Gate diagnostics include reset,
+restore and failure counters. Host-side tests cover healthy operation,
+configuration loss, reset readiness/timeout, cooldown and subsequent retry.
+Automatic recovery on hardware remains to be confirmed; the underlying
+cause of configuration loss remains unknown.
+
+### RC522 startup reset timeout
+
+A hardware attempt stopped in the driver's startup reset readiness check,
+before automatic recovery could start. Added explicit 10 ms RST-low and
+50 ms startup settling delays, one bounded startup retry using the RST pin,
+and Command/Version register values in timeout errors. This startup-only
+retry may block initialization; runtime recovery remains staged. Hardware
+verification is pending; persistent failure is not suppressed.
+
+### Load-isolation test prepared
+
+Added `test_rfid_isolation.py` with separate RFID-only, chime, and relay
+modes, holding Wi-Fi configuration constant. Tags never actuate the relay;
+GPIO14 applies only the selected load. Lost stable RC522 configuration
+prints a snapshot and stops without automatic recovery. Hardware outcomes
+are pending; see `rfid.md` for the staged comparison procedure.
+
+### RFID isolation baseline and return to polling
+
+After a full USB power cycle, RFID-only isolation with Wi-Fi enabled ran
+for approximately 80 seconds and recorded 36 reads across multiple tags,
+without detected configuration loss. The earlier all-zero register snapshot
+occurred before this power cycle. No chime/relay isolation result is yet
+confirmed; voltage disturbance remains a hypothesis.
+
+Further IRQ diagnosis is deferred. The integrated gate script now uses
+SPI polling without configuring GPIO21 or routing reader interrupts to its
+IRQ pin. REQA and anticollision still advance across loop iterations to
+avoid reintroducing audio stalls. Automatic configuration recovery and its
+counters remain enabled, so reset counts must be checked before declaring
+polling stable. The shared driver keeps opt-in IRQ wrappers for preserved
+standalone tests. Disconnect RC522 IRQ with power removed; the remaining
+pinout, house script and call controls are unchanged. Hardware verification
+of this integrated polling variant is pending.
+
+### Integrated polling trial rejected; IRQ restored
+
+The integrated polling trial did not detect tags in the reported hardware
+attempt. Restored the exact pre-trial driver/controller implementation:
+GPIO21 falling-edge RFID notification, nonblocking REQA/UID steps, manual
+diagnostics, startup reset delays/retry, and automatic configuration
+recovery with counters. Reconnect RC522 IRQ to GPIO21 with power removed.
+Call controls and house code are unchanged. Restoration does not establish
+long-term stability or resolve the cause of configuration loss.
